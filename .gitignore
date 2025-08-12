@@ -1,0 +1,11 @@
+# Node modules
+node_modules/
+
+# Environment files
+.env
+
+# Build output
+server/dist/
+
+# Drizzle generated files
+drizzle/

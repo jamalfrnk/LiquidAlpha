@@ -7,7 +7,7 @@ import { addPricePoints } from './price-history';
 import { generateSignals } from './technical-analysis';
 import { getFundingRate } from './hyperliquid-real';
 import { wrapAsync, installProcessErrorHandlers } from './bootstrap';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 /**
  * Main server module for LiquidAlpha.
@@ -98,6 +98,12 @@ wss.on('connection', (ws) => {
  * @returns an object keyed by uppercase symbol containing price,
  *          24h change and volume values; undefined on failure
  */
+interface CoinGeckoSimplePriceResponse {
+  bitcoin: { usd: number; usd_24h_change: number; usd_24h_vol: number };
+  ethereum: { usd: number; usd_24h_change: number; usd_24h_vol: number };
+  solana: { usd: number; usd_24h_change: number; usd_24h_vol: number };
+}
+
 async function fetchMarketData() {
   try {
     const ids = ['bitcoin', 'ethereum', 'solana'];
@@ -106,7 +112,7 @@ async function fetchMarketData() {
     if (!res.ok) {
       throw new Error(`CoinGecko response ${res.status}`);
     }
-    const data = await res.json();
+    const data = (await res.json()) as CoinGeckoSimplePriceResponse;
     // Map CoinGecko ids to our symbols and return the relevant fields
     return {
       BTC: {
@@ -150,9 +156,9 @@ async function updateMarkets() {
     // Insert snapshot into markets table
     await db.insert(markets).values({
       symbol,
-      price,
-      change24h,
-      volume,
+      price: price.toString(),
+      change24h: change24h.toString(),
+      volume: volume.toString(),
     });
     // Record price point into history
     await addPricePoints([{ symbol, price, timestamp }]);
@@ -194,7 +200,7 @@ app.get('/api/markets', wrapAsync(async (_req, res) => {
   const rows = await db
     .select()
     .from(markets)
-    .orderBy(markets.updatedAt.desc())
+    .orderBy(desc(markets.updatedAt))
     .limit(50);
   res.json(rows);
 }));
@@ -207,7 +213,7 @@ app.get('/api/signals', wrapAsync(async (_req, res) => {
   const rows = await db
     .select()
     .from(signals)
-    .orderBy(signals.createdAt.desc());
+    .orderBy(desc(signals.createdAt));
   res.json(rows);
 }));
 
@@ -227,7 +233,7 @@ app.post('/api/signals/generate', wrapAsync(async (req, res) => {
   const rows = await db
     .select()
     .from(signals)
-    .orderBy(signals.createdAt.desc())
+    .orderBy(desc(signals.createdAt))
     .limit(10);
   res.json(rows);
   broadcast('newSignal', { message: 'Signals generated via API' });

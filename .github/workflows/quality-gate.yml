@@ -1,0 +1,124 @@
+name: Quality Gate (Deterministic CI)
+
+# Deterministic checks only. This workflow intentionally does NOT depend on
+# Claude/Anthropic API access — it must be able to run and gate merges on its own.
+# The agent-assisted review (architecture, duplicate-logic, business-logic, blockchain
+# risk, docs consistency) happens separately via the `liquidalpha-quality-gate` Claude
+# Code subagent (see docs/development/QUALITY_GATE_AGENT.md) before a PR is opened.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Least privilege by default; individual jobs opt into more only if ever needed.
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-build-and-checks:
+    name: server build / typecheck / lint / test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Detected up front so Setup Node's cache step never points at a path
+      # that doesn't exist -- actions/setup-node hard-fails with "unable to
+      # cache dependencies" if cache-dependency-path can't be resolved, which
+      # previously masked the real problem (server/package-lock.json was never
+      # committed because drizzle-kit's version pin couldn't resolve at all).
+      - name: Detect server lockfile
+        id: detect-lock
+        run: |
+          if [ -f server/package-lock.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js (with cache)
+        if: steps.detect-lock.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - name: Setup Node.js (no cache)
+        if: steps.detect-lock.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Fails closed if the lockfile is missing/out of sync with package.json,
+      # instead of silently resolving new versions in CI.
+      - name: Install dependencies (locked)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::error::server/package-lock.json is missing. Commit a lockfile so CI installs are reproducible."
+            exit 1
+          fi
+
+      - name: Lint (if configured)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.lint ? 0 : 1)"; then
+            npm run lint
+          else
+            echo "::warning::No 'lint' script in server/package.json — skipping. Add one (e.g. ESLint) to enable this check."
+          fi
+
+      - name: Type check / build
+        run: npm run build
+
+      - name: Unit + integration tests (if configured)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "::warning::No 'test' script in server/package.json — skipping. This repository currently has no automated tests."
+          fi
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+        continue-on-error: true # informational until a documented triage process exists
+
+      - name: Migration sanity check (drizzle schema vs. migrations, if present)
+        run: |
+          if [ -d drizzle ] || [ -f drizzle.config.ts ]; then
+            npx drizzle-kit check:pg --config=drizzle.config.ts || echo "::warning::drizzle-kit check reported an issue — review migration/schema drift."
+          else
+            echo "No drizzle migrations directory present yet."
+          fi
+        continue-on-error: true
+
+  secret-scan:
+    name: secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Guardrail: this repo has no client/ yet. Once one is added, add a matching job here
+  # (install/build/typecheck/lint/test/bundle-check) rather than folding it into server's job.

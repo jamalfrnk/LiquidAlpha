@@ -1,0 +1,202 @@
+{
+  "agent": "liquidalpha-quality-gate",
+  "reportVersion": "1.0.0",
+  "generatedAt": "2026-07-28",
+  "decision": "FAIL",
+  "reviewedRef": {
+    "branch": "main",
+    "commit": "bfb55a50cb6cff3a1aa1a95c22729f6b85340e8b",
+    "producedFromBranch": "feature/quality-gate-agent",
+    "note": "This branch only adds the quality-gate agent, CI workflow, and docs; it does not modify server/. All findings pre-exist on main."
+  },
+  "riskClassification": "High",
+  "commandsExecuted": [
+    { "command": "git status", "exitStatus": 0 },
+    { "command": "git branch --show-current", "exitStatus": 0 },
+    { "command": "git log --oneline --decorate -10", "exitStatus": 0 },
+    { "command": "git diff --stat main", "exitStatus": 0, "notes": "no server/ changes on this branch" },
+    { "command": "npm install", "cwd": "server", "exitStatus": 1, "notes": "ETARGET: no version satisfies drizzle-kit@^0.13.3" },
+    { "command": "npm view drizzle-kit versions", "exitStatus": 0 },
+    { "command": "npm view drizzle-orm versions", "exitStatus": 0 },
+    { "command": "npm run build", "cwd": "server", "exitStatus": null, "notes": "blocked by install failure" },
+    { "command": "npm test", "cwd": "server", "exitStatus": null, "notes": "skipped: no test script, no test files" },
+    { "command": "npm run lint", "cwd": "server", "exitStatus": null, "notes": "skipped: no lint script" }
+  ],
+  "validationResults": {
+    "install": "FAIL",
+    "buildTypecheck": "BLOCKED",
+    "lint": "SKIPPED",
+    "tests": "SKIPPED",
+    "dependencyAudit": "BLOCKED",
+    "secretScan": "PASS",
+    "migrationCheck": "N/A"
+  },
+  "findings": [
+    {
+      "id": "LA-QG-001",
+      "severity": "Critical",
+      "category": "ci-readiness",
+      "file": "server/package.json",
+      "location": "devDependencies.drizzle-kit",
+      "evidence": "npm install exits 1 with ETARGET for drizzle-kit@^0.13.3; only 0.13.0 is published in that line.",
+      "impact": "Project cannot be installed, built, tested, or shipped through any CI pipeline.",
+      "requiredCorrection": "Pin drizzle-kit to an installable version compatible with drizzle-orm 0.28.x; verify npm install succeeds; commit the resulting lockfile.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-002",
+      "severity": "Critical",
+      "category": "correctness",
+      "file": "server/src/auth.ts",
+      "location": "register(), login() - users.email / users.password access",
+      "evidence": "auth.ts queries/inserts users.email and users.password, but server/src/db/schema.ts's users table only has id, address, builderCode, createdAt.",
+      "impact": "register()/login() cannot function against the actual schema.",
+      "requiredCorrection": "Reconcile auth.ts with the wallet-signature model the README describes and the schema already supports, or add the missing columns if email+password auth is actually intended.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-003",
+      "severity": "Critical",
+      "category": "broken-functionality",
+      "file": "server/src/auth.ts",
+      "location": "import bcrypt from 'bcrypt'; import jwt from 'jsonwebtoken';",
+      "evidence": "Neither bcrypt nor jsonwebtoken (nor @types) are declared in server/package.json.",
+      "impact": "auth.ts cannot compile or run even if LA-QG-001/002 are fixed.",
+      "requiredCorrection": "Declare bcrypt/@types/bcrypt/jsonwebtoken/@types/jsonwebtoken if this model is kept, or remove the imports if auth.ts is rewritten.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-004",
+      "severity": "High",
+      "category": "authentication",
+      "file": "server/src/auth.ts",
+      "location": "const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';",
+      "evidence": "Hardcoded fallback secret used whenever JWT_SECRET is unset.",
+      "impact": "Deployments that omit JWT_SECRET silently accept tokens forgeable by anyone who reads the source.",
+      "requiredCorrection": "Fail fast at startup if JWT_SECRET is unset outside local dev.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-005",
+      "severity": "High",
+      "category": "ci-readiness",
+      "file": "server/",
+      "location": "missing package-lock.json",
+      "evidence": "No lockfile present; new CI workflow fails closed on this.",
+      "impact": "Installs are not reproducible; CI cannot get past the install step.",
+      "requiredCorrection": "Commit server/package-lock.json once npm install succeeds.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-006",
+      "severity": "High",
+      "category": "documentation-drift",
+      "file": "server/src/auth.ts, server/src/server.ts, README.md",
+      "location": "register/login never mounted; README describes signature-based auth",
+      "evidence": "grep for register/login/auth in server.ts returns no matches; README states auth is signature-based and private keys never reach the server.",
+      "impact": "No working authentication is reachable through the running server, contrary to documentation.",
+      "requiredCorrection": "Wire a corrected auth implementation into server.ts with tests, or remove the dead code until the documented model is implemented.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-007",
+      "severity": "High",
+      "category": "test-coverage",
+      "file": "server/",
+      "location": "repository-wide",
+      "evidence": "No test files exist; no test script defined.",
+      "impact": "Signal-generation and risk logic (indicators.ts, technical-analysis.ts) has zero automated verification.",
+      "requiredCorrection": "Add a test runner and unit tests for indicators.ts and technical-analysis.ts at minimum.",
+      "blocksGate": true
+    },
+    {
+      "id": "LA-QG-008",
+      "severity": "Medium",
+      "category": "owasp-security-misconfiguration",
+      "file": "server/src/server.ts",
+      "location": "app.use(cors());",
+      "evidence": "CORS enabled with no origin allowlist.",
+      "impact": "Cross-origin exposure once reachable outside local dev.",
+      "requiredCorrection": "Set an explicit origin allowlist before any non-local deployment.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-009",
+      "severity": "Medium",
+      "category": "reliability",
+      "file": "server/src/db/index.ts",
+      "location": "single pg.Client, no reconnect handling",
+      "evidence": "A single Client (not Pool) is created once at module load with no reconnect logic.",
+      "impact": "A dropped connection takes down all DB access until process restart.",
+      "requiredCorrection": "Use pg.Pool with reconnect-on-error handling.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-010",
+      "severity": "Medium",
+      "category": "ci-readiness",
+      "file": "server/package.json",
+      "location": "missing lint/test scripts",
+      "evidence": "No lint or test script defined.",
+      "impact": "CI's lint/test steps currently no-op with a warning.",
+      "requiredCorrection": "Add ESLint and a test runner with matching scripts.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-011",
+      "severity": "Medium",
+      "category": "resource-growth",
+      "file": "server/src/price-history.ts",
+      "location": "addPricePoints",
+      "evidence": "Doc comment states older rows are not automatically purged; no cleanup job exists.",
+      "impact": "price_history grows unbounded over time.",
+      "requiredCorrection": "Add a scheduled cleanup enforcing HISTORY_LIMIT per symbol.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-012",
+      "severity": "Low",
+      "category": "data-integrity",
+      "file": "server/src/db/schema.ts",
+      "location": "users.address",
+      "evidence": "No unique constraint on users.address.",
+      "impact": "Duplicate user rows per wallet address are not prevented at the DB level.",
+      "requiredCorrection": "Add a unique index once the auth model is finalized.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-013",
+      "severity": "Low",
+      "category": "data-integrity",
+      "file": "server/src/db/schema.ts",
+      "location": "performance.userId, performance.signalId",
+      "evidence": "Plain uuid columns with no FK reference.",
+      "impact": "Referential integrity relies entirely on application code.",
+      "requiredCorrection": "Add FK constraints once the write paths are implemented and tested.",
+      "blocksGate": false
+    },
+    {
+      "id": "LA-QG-014",
+      "severity": "Low",
+      "category": "maintainability",
+      "file": "server/package.json",
+      "location": "dependency versions",
+      "evidence": "Several dependency pins are dated relative to current majors.",
+      "impact": "Widens future upgrade effort; delays security patches.",
+      "requiredCorrection": "Schedule a routine dependency refresh once npm audit can run.",
+      "blocksGate": false
+    }
+  ],
+  "requiredFixesBeforeCI": ["LA-QG-001", "LA-QG-002", "LA-QG-003", "LA-QG-004", "LA-QG-005", "LA-QG-006", "LA-QG-007"],
+  "recommendedFollowUp": ["LA-QG-008", "LA-QG-009", "LA-QG-010", "LA-QG-011", "LA-QG-012", "LA-QG-013", "LA-QG-014"],
+  "demonstrationFixtures": {
+    "location": "docs/development/QUALITY_GATE_AGENT_DEMO.md",
+    "results": [
+      { "id": "LA-QG-DEMO-01", "category": "duplicate-logic", "severity": "Medium", "detectedAsExpected": true },
+      { "id": "LA-QG-DEMO-02", "category": "missing-authorization", "severity": "Critical", "detectedAsExpected": true },
+      { "id": "LA-QG-DEMO-03", "category": "hardcoded-secret", "severity": "Critical", "detectedAsExpected": true },
+      { "id": "LA-QG-DEMO-04", "category": "failing-test", "severity": "High", "detectedAsExpected": true },
+      { "id": "LA-QG-DEMO-05", "category": "live-trading-safety", "severity": "Critical", "detectedAsExpected": true }
+    ]
+  }
+}

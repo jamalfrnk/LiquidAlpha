@@ -13,9 +13,9 @@ async function seed() {
 
   // Insert initial market rows
   await db.insert(markets).values([
-    { symbol: 'BTC', price: 0, volume: 0, change24h: 0 },
-    { symbol: 'ETH', price: 0, volume: 0, change24h: 0 },
-    { symbol: 'SOL', price: 0, volume: 0, change24h: 0 },
+    { symbol: 'BTC', price: '0', volume: '0', change24h: '0' },
+    { symbol: 'ETH', price: '0', volume: '0', change24h: '0' },
+    { symbol: 'SOL', price: '0', volume: '0', change24h: '0' },
   ]);
 
   console.log('Seed data inserted');

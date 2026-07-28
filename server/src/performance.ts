@@ -19,10 +19,17 @@ export interface PerformanceRecord {
  * Use this function after a trade has been executed to record the outcome.
  *
  * @param userId – the ID of the user
+ * @param signalId – the ID of the signal this performance entry is tied to
  * @param pnl – profit and loss measured in quote currency
+ * @param isOpen – whether the position is still open (defaults to true for a freshly recorded trade)
  */
-export async function recordPerformance(userId: string, pnl: number): Promise<void> {
-  await db.insert(performance).values({ userId, pnl });
+export async function recordPerformance(
+  userId: string,
+  signalId: string,
+  pnl: number,
+  isOpen = true,
+): Promise<void> {
+  await db.insert(performance).values({ userId, signalId, pnl: pnl.toString(), isOpen });
 }
 
 /**

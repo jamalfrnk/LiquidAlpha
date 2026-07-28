@@ -79,7 +79,7 @@ export async function generateSignals(): Promise<void> {
     await db.insert(signals).values({
       asset: symbol,
       signalType,
-      confidence,
+      confidence: confidence.toString(),
       active: true,
     });
   }

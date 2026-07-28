@@ -33,12 +33,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      # Detected up front so Setup Node's cache step never points at a path
+      # that doesn't exist -- actions/setup-node hard-fails with "unable to
+      # cache dependencies" if cache-dependency-path can't be resolved, which
+      # previously masked the real problem (server/package-lock.json was never
+      # committed because drizzle-kit's version pin couldn't resolve at all).
+      - name: Detect server lockfile
+        id: detect-lock
+        run: |
+          if [ -f server/package-lock.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js (with cache)
+        if: steps.detect-lock.outputs.exists == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: server/package-lock.json
+
+      - name: Setup Node.js (no cache)
+        if: steps.detect-lock.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       # Fails closed if the lockfile is missing/out of sync with package.json,
       # instead of silently resolving new versions in CI.

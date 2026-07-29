@@ -1,0 +1,1 @@
+ALTER TABLE "markets" ADD CONSTRAINT "markets_symbol_unique" UNIQUE("symbol");

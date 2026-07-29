@@ -8,6 +8,13 @@
       "when": 1785351470311,
       "tag": "0000_red_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785353545661,
+      "tag": "0001_fantastic_vance_astro",
+      "breakpoints": true
     }
   ]
 }

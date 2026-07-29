@@ -64,12 +64,27 @@ export async function runIngestionCycle(broadcast: BroadcastFn): Promise<void> {
   for (const symbol of Object.keys(data) as Array<keyof MarketData>) {
     const { price, change24h, volume } = data[symbol];
 
-    await db.insert(markets).values({
-      symbol,
-      price: price.toString(),
-      change24h: change24h.toString(),
-      volume: volume.toString(),
-    });
+    // Upsert -- one row per symbol, updated in place. This used to be a
+    // plain insert, which meant markets grew a new row every cycle forever
+    // (see the schema.ts docstring for why that's wrong for a "current
+    // snapshot" table).
+    await db
+      .insert(markets)
+      .values({
+        symbol,
+        price: price.toString(),
+        change24h: change24h.toString(),
+        volume: volume.toString(),
+      })
+      .onConflictDoUpdate({
+        target: markets.symbol,
+        set: {
+          price: price.toString(),
+          change24h: change24h.toString(),
+          volume: volume.toString(),
+          updatedAt: timestamp,
+        },
+      });
     await addPricePoints([{ symbol, price, timestamp }]);
     await pruneOldPriceHistory(symbol);
 

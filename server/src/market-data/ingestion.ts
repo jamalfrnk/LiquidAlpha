@@ -3,7 +3,7 @@ import { markets } from '../db/schema';
 import { addPricePoints, pruneOldPriceHistory } from '../price-history';
 import { fetchMarketData, type MarketData } from './coingecko';
 
-export type BroadcastFn = (event: string, payload: unknown) => void;
+export type PublishMarketUpdateFn = (symbol: string, event: string, payload: unknown) => void;
 
 /**
  * How stale `markets.updatedAt` can be before a row should be treated as
@@ -48,7 +48,7 @@ export function getIngestionHealth(): IngestionHealth {
  * reference app's Math.random() fallback), so a down feed shows up as
  * stale `updatedAt` timestamps rather than fabricated prices.
  */
-export async function runIngestionCycle(broadcast: BroadcastFn): Promise<void> {
+export async function runIngestionCycle(publishMarketUpdate: PublishMarketUpdateFn): Promise<void> {
   lastAttemptAt = new Date();
   const data: MarketData | undefined = await fetchMarketData();
 
@@ -88,6 +88,6 @@ export async function runIngestionCycle(broadcast: BroadcastFn): Promise<void> {
     await addPricePoints([{ symbol, price, timestamp }]);
     await pruneOldPriceHistory(symbol);
 
-    broadcast('marketUpdate', { symbol, price, change24h, volume, timestamp });
+    publishMarketUpdate(symbol, 'marketUpdate', { symbol, price, change24h, volume, timestamp });
   }
 }

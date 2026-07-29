@@ -2,7 +2,7 @@ import { env } from './config/env';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { WebSocketServer, WebSocket } from 'ws';
+import { createMarketDataWsServer } from './websocket/server';
 import { db, connectDb } from './db/index';
 import { markets, signals } from './db/schema';
 import { generateSignals } from './technical-analysis';
@@ -61,66 +61,33 @@ connectDb().then(() => {
 });
 
 /**
- * WebSocket management
- *
- * A single WebSocketServer instance manages connections on WS_PORT.
- * Clients receive two kinds of broadcasts:
- *   - marketUpdate: emitted when fresh market data has been fetched
- *   - newSignal: emitted when a new trading signal is generated
- *
- * The `clients` set holds references to active connections so that
- * broadcasts can iterate without keeping stale references after a
- * connection closes.  On connection, each client is added to the set; on
- * close it is removed.  The WebSocketServer itself handles ping/pong to
- * keep connections alive; no additional heartbeat is implemented here as
- * the built‑in ping interval of ws suffices for typical usage.
+ * WebSocket server with real per-channel/per-symbol subscriptions --
+ * replacing the previous global broadcast-to-every-client, which had no
+ * concept of client interest at all (GH F-4, Replit H-4). See
+ * websocket/server.ts for the subscription/auth/heartbeat mechanics.
  */
-const WS_PORT = env.WS_PORT;
-const wss = new WebSocketServer({ port: WS_PORT });
-const clients = new Set<WebSocket>();
-
-// Broadcast helper: sends a JSON serialised message to all connected
-// clients.  If a client is not open the send attempt is ignored.
-function broadcast(event: string, payload: unknown) {
-  const message = JSON.stringify({ event, payload });
-  for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(message);
-      } catch (err) {
-        // Ignore errors on individual clients; they will be cleaned up on close.
-      }
-    }
-  }
-}
-
-wss.on('connection', (ws) => {
-  clients.add(ws);
-  ws.on('close', () => {
-    clients.delete(ws);
-  });
-});
+const wsServer = createMarketDataWsServer(env.WS_PORT);
 
 /**
  * Periodically generate trading signals.
  *
  * Every 30 seconds this function invokes the signal generator to
  * evaluate current price history and create new signals.  After
- * generation it broadcasts a notification to clients so they can
- * refresh their signal lists.  Errors are logged but do not interrupt
- * the interval loop.
+ * generation it publishes a notification to clients subscribed to the
+ * `signals` channel so they can refresh their signal lists.  Errors are
+ * logged but do not interrupt the interval loop.
  */
 async function updateSignals() {
   try {
     await generateSignals();
-    broadcast('newSignal', { message: 'Signals updated' });
+    wsServer.publishSignal('newSignal', { message: 'Signals updated' });
   } catch (err) {
     console.error('Signal generation failed', err);
   }
 }
 
 // Kick off background tasks with specified intervals
-setInterval(() => runIngestionCycle(broadcast), 10_000);
+setInterval(() => runIngestionCycle((symbol, event, payload) => wsServer.publishMarketUpdate(symbol, event, payload)), 10_000);
 setInterval(updateSignals, 30_000);
 
 /**
@@ -153,6 +120,12 @@ app.get('/api/markets', wrapAsync(async (_req, res) => {
 // whether any individual market row happens to be stale.
 app.get('/api/market-data/health', (_req, res) => {
   res.json(getIngestionHealth());
+});
+
+// Server-side fan-out visibility: how many connections and subscriptions
+// the WebSocket server currently has, rather than that state being opaque.
+app.get('/api/websocket/metrics', (_req, res) => {
+  res.json(wsServer.getMetrics());
 });
 
 // Retrieve generated signals, paginated (default 50, max 100 per page --
@@ -190,7 +163,7 @@ app.post('/api/signals/generate', validate('body', GenerateSignalsRequestSchema)
     .orderBy(desc(signals.createdAt))
     .limit(10);
   res.json(rows);
-  broadcast('newSignal', { message: 'Signals generated via API' });
+  wsServer.publishSignal('newSignal', { message: 'Signals generated via API' });
 }));
 
 // Returns simple statistics about signals.  At the moment it reports
@@ -236,5 +209,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 const PORT = env.PORT;
 app.listen(PORT, () => {
   console.log(`HTTP server listening on http://localhost:${PORT}`);
-  console.log(`WebSocket server listening on ws://localhost:${WS_PORT}`);
+  console.log(`WebSocket server listening on ws://localhost:${env.WS_PORT}`);
 });

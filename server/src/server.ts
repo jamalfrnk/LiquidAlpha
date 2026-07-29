@@ -1,3 +1,4 @@
+import { env } from './config/env';
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -59,7 +60,7 @@ connectDb().then(() => {
  * keep connections alive; no additional heartbeat is implemented here as
  * the built‑in ping interval of ws suffices for typical usage.
  */
-const WS_PORT = parseInt(process.env.WS_PORT || '8080', 10);
+const WS_PORT = env.WS_PORT;
 const wss = new WebSocketServer({ port: WS_PORT });
 const clients = new Set<WebSocket>();
 
@@ -277,7 +278,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 // Start the HTTP server.  The port can be configured via the PORT
 // environment variable.  A message is printed to the console on start.
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = env.PORT;
 app.listen(PORT, () => {
   console.log(`HTTP server listening on http://localhost:${PORT}`);
   console.log(`WebSocket server listening on ws://localhost:${WS_PORT}`);

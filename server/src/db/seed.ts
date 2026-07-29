@@ -1,10 +1,10 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import { markets, signals } from './schema';
-import 'dotenv/config';
+import { env } from '../config/env';
 
 const client = new Client({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
 });
 
 async function seed() {

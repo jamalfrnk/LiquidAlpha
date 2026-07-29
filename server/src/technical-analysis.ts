@@ -1,86 +1,202 @@
 import { db } from './db/index';
 import { signals } from './db/schema';
 import { getPriceHistory, HISTORY_LIMIT } from './price-history';
-import { ema, macd, rsi } from './indicators';
+import { ema, macd, rsi, atr, adx, fisherTransform, keltnerChannel } from './indicators';
+import { STALE_AFTER_MS } from './market-data/ingestion';
 
 /**
  * Signal generation engine.
  *
- * This module implements a simplified multi‑indicator strategy inspired by
- * Pine Script.  The generator loops over a predefined list of symbols,
- * retrieves their recent price history and calculates a set of indicators
- * (EMA50/EMA200 crossover, MACD histogram and RSI).  Based on the
- * alignment of these indicators a trading signal is produced with a
- * corresponding confidence score.  If the data series is too short for
- * accurate indicator calculation the symbol is skipped.
+ * Evaluates a multi-indicator confluence -- EMA50/EMA200 trend, MACD
+ * momentum, RSI, ADX (trend strength), Fisher Transform (turning points),
+ * and Keltner Channel (breakout) -- and produces a directional signal with
+ * a `ruleAlignmentScore`, not a "confidence": it's an explicit count of how
+ * many rules agreed, versioned via RULE_VERSION, not a calibrated
+ * probability of anything (GH F-5, Replit H-3 -- the "N confirmations = a
+ * flat X% confidence" pattern flagged in both audits).
+ *
+ * The decision logic (evaluateSignal) is a pure function over price data,
+ * deliberately separated from the DB orchestration (generateSignals) below
+ * it -- same pattern used for the auth module -- so it's unit-testable
+ * without a database.
  */
 
+export const RULE_VERSION = 'v2';
+const MIN_HISTORY = 210; // enough for EMA200 to be meaningful
+const ATR_STOP_MULTIPLIER = 1.5;
+const MIN_RISK_REWARD = 2; // enforced by construction, not checked after the fact
+const EMA_SEPARATION_THRESHOLD = 0.005; // 0.5%
+const ADX_TREND_THRESHOLD = 25;
+
+export interface IndicatorSnapshot {
+  ema50: number;
+  ema200: number;
+  macdHist: number;
+  rsi: number;
+  adx: number;
+  fisher: number;
+  keltnerUpper: number;
+  keltnerLower: number;
+  atr: number;
+}
+
+export interface SignalEvaluation {
+  signalType: 'LONG' | 'SHORT';
+  ruleAlignmentScore: number;
+  ruleVersion: string;
+  explanation: string;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskRewardRatio: number;
+  indicatorSnapshot: IndicatorSnapshot;
+}
+
 /**
- * Generates trading signals for a fixed set of assets.  The resulting
- * signals are inserted into the `signals` table.  The function is idempotent
- * across calls: it does not deactivate or delete old signals; consumers
- * should interpret the most recent signals per asset as the current
- * recommendation.
+ * Pure decision function: given a chronological (oldest-first) closing
+ * price series, decides whether a signal fires and, if so, everything
+ * needed to record it. Returns null when there isn't enough history, when
+ * trend and momentum disagree (no directional call to make), or when the
+ * computed indicators are still NaN (warm-up period).
+ */
+export function evaluateSignal(closes: number[]): SignalEvaluation | null {
+  if (closes.length < MIN_HISTORY) return null;
+
+  const ema50Series = ema(closes, 50);
+  const ema200Series = ema(closes, 200);
+  const macdResult = macd(closes, 12, 26, 9);
+  const rsiSeries = rsi(closes, 14);
+  const adxSeries = adx(closes, 14);
+  const fisherSeries = fisherTransform(closes, 10);
+  const keltner = keltnerChannel(closes, 20, 10, 2);
+  const atrSeries = atr(closes, closes, closes, 14);
+
+  const last = closes.length - 1;
+  const ema50Value = ema50Series[last];
+  const ema200Value = ema200Series[last];
+  const macdHist = macdResult.hist[macdResult.hist.length - 1];
+  const rsiValue = rsiSeries[last];
+  const adxValue = adxSeries[last];
+  const fisherValue = fisherSeries[last];
+  const keltnerUpper = keltner.upper[last];
+  const keltnerLower = keltner.lower[last];
+  const atrValue = atrSeries[last];
+
+  if ([ema50Value, ema200Value, macdHist, atrValue].some((v) => v === undefined || isNaN(v))) return null;
+
+  const trendBullish = ema50Value > ema200Value;
+  const momentumBullish = macdHist > 0;
+  const bullish = trendBullish && momentumBullish;
+  const bearish = !trendBullish && !momentumBullish;
+  if (!bullish && !bearish) return null; // conflicting trend/momentum -- no call
+
+  const entryPrice = closes[last];
+
+  // Additional confirmations, each an independent vote for the same
+  // direction the trend+momentum gate already settled on.
+  let rsiConfirms = false;
+  if (!isNaN(rsiValue)) {
+    if (rsiValue < 30) rsiConfirms = bullish;
+    else if (rsiValue > 70) rsiConfirms = bearish;
+    else rsiConfirms = true; // neutral RSI doesn't contradict the trend
+  }
+  const adxConfirms = !isNaN(adxValue) && adxValue > ADX_TREND_THRESHOLD;
+  const fisherConfirms = !isNaN(fisherValue) && (bullish ? fisherValue > 0 : fisherValue < 0);
+  const keltnerConfirms = bullish ? entryPrice > keltnerUpper : entryPrice < keltnerLower;
+  const emaSeparationConfirms = Math.abs(ema50Value - ema200Value) / ema200Value > EMA_SEPARATION_THRESHOLD;
+
+  const confirmations = [rsiConfirms, adxConfirms, fisherConfirms, keltnerConfirms, emaSeparationConfirms];
+  const confirmCount = confirmations.filter(Boolean).length;
+  // 40 base (the trend+momentum gate itself) + up to 12 per additional
+  // confirmation, capped at 100 by construction (40 + 5*12 = 100).
+  const ruleAlignmentScore = 40 + confirmCount * 12;
+
+  const signalType: 'LONG' | 'SHORT' = bullish ? 'LONG' : 'SHORT';
+  const riskDistance = ATR_STOP_MULTIPLIER * atrValue;
+  const stopLoss = bullish ? entryPrice - riskDistance : entryPrice + riskDistance;
+  const takeProfit = bullish
+    ? entryPrice + riskDistance * MIN_RISK_REWARD
+    : entryPrice - riskDistance * MIN_RISK_REWARD;
+
+  const explanation =
+    `${signalType} signal: trend and momentum aligned ` +
+    `(EMA50 ${trendBullish ? 'above' : 'below'} EMA200, MACD histogram ${momentumBullish ? 'positive' : 'negative'}). ` +
+    `Confirmed by ${confirmCount} of 5 additional checks (RSI, ADX, Fisher Transform, Keltner breakout, EMA separation).`;
+
+  return {
+    signalType,
+    ruleAlignmentScore,
+    ruleVersion: RULE_VERSION,
+    explanation,
+    entryPrice,
+    stopLoss,
+    takeProfit,
+    riskRewardRatio: MIN_RISK_REWARD,
+    indicatorSnapshot: {
+      ema50: ema50Value,
+      ema200: ema200Value,
+      macdHist,
+      rsi: rsiValue,
+      adx: adxValue,
+      fisher: fisherValue,
+      keltnerUpper,
+      keltnerLower,
+      atr: atrValue,
+    },
+  };
+}
+
+/**
+ * Generates trading signals for a fixed set of assets. Fetches recent price
+ * history, applies a stale-price guard (skips a symbol entirely if its most
+ * recent observation is older than STALE_AFTER_MS -- the same freshness
+ * threshold market-data/ingestion.ts uses -- rather than generating a
+ * signal from data nobody would call current), and persists the full
+ * evaluation, including the evidence snapshot, for any that fire.
+ *
+ * Idempotent across calls: it does not deactivate or delete old signals;
+ * consumers should interpret the most recent signal per asset as current.
  */
 export async function generateSignals(): Promise<void> {
   const symbols = ['BTC', 'ETH', 'SOL'];
   for (const symbol of symbols) {
-    // Fetch up to HISTORY_LIMIT bars for the symbol.  We need at least 210
-    // observations for EMA200 to be meaningful (see PDF specification).
     const history = await getPriceHistory(symbol, HISTORY_LIMIT);
     if (history.length < 210) {
       console.warn(`Skipping ${symbol}: not enough history (${history.length} < 210)`);
       continue;
     }
-    // Extract closing prices as numbers in ascending order (oldest first)
-    const closes = history.map((row: any) => parseFloat(row.price)).reverse();
-    // Calculate indicators
-    const ema50 = ema(closes, 50);
-    const ema200 = ema(closes, 200);
-    const macdObj = macd(closes, 12, 26, 9);
-    const macdHist = macdObj.hist;
-    const rsiSeries = rsi(closes, 14);
-    // Determine trend direction based on EMA cross
-    const latestEma50 = ema50[ema50.length - 1];
-    const latestEma200 = ema200[ema200.length - 1];
-    const trendBullish = latestEma50 > latestEma200;
-    const latestMacdHist = macdHist[macdHist.length - 1];
-    const momentumBullish = latestMacdHist > 0;
-    const latestRsi = rsiSeries[rsiSeries.length - 1];
-    // In RSI interpretation, values above 70 suggest overbought (bearish), below 30 oversold (bullish)
-    let rsiBullish: boolean;
-    if (isNaN(latestRsi)) {
-      rsiBullish = false;
-    } else if (latestRsi < 30) {
-      rsiBullish = true;
-    } else if (latestRsi > 70) {
-      rsiBullish = false;
-    } else {
-      // Neutral range (30‑70) is treated as neutral; align with trend
-      rsiBullish = trendBullish;
-    }
-    // Determine final signal direction.  Require trend and momentum to agree.
-    const bullish = trendBullish && momentumBullish;
-    const bearish = !trendBullish && !momentumBullish;
-    if (!bullish && !bearish) {
-      // Conflicting indicators: skip creating a signal
-      console.info(`Skipping ${symbol}: conflicting trend/momentum`);
+
+    const chronological = [...history].reverse(); // getPriceHistory returns newest-first
+    const mostRecent = chronological[chronological.length - 1];
+    const dataAgeMs = Date.now() - mostRecent.timestamp.getTime();
+    if (dataAgeMs > STALE_AFTER_MS) {
+      console.warn(`Skipping ${symbol}: most recent price data is ${dataAgeMs}ms old (stale-price guard)`);
       continue;
     }
-    // Build confidence score.  Start at 60 and add points for each confirming indicator.
-    let confidence = 60;
-    if ((bullish || bearish) && Math.abs(latestMacdHist) > 0) confidence += 10;
-    if (Math.abs(latestEma50 - latestEma200) / latestEma200 > 0.005) confidence += 10;
-    if (rsiBullish === bullish) confidence += 10;
-    if (confidence > 100) confidence = 100;
-    // Determine signal type string
-    const signalType = bullish ? 'LONG' : 'SHORT';
-    // Insert the signal into the database
+
+    const closes = chronological.map((row) => parseFloat(row.price));
+    const evaluation = evaluateSignal(closes);
+    if (!evaluation) {
+      console.info(`Skipping ${symbol}: no aligned signal this cycle`);
+      continue;
+    }
+
     await db.insert(signals).values({
       asset: symbol,
-      signalType,
-      confidence: confidence.toString(),
+      signalType: evaluation.signalType,
       status: 'ACTIVE',
+      ruleAlignmentScore: evaluation.ruleAlignmentScore.toString(),
+      ruleVersion: evaluation.ruleVersion,
+      explanation: evaluation.explanation,
+      entryPrice: evaluation.entryPrice.toString(),
+      stopLoss: evaluation.stopLoss.toString(),
+      takeProfit: evaluation.takeProfit.toString(),
+      riskRewardRatio: evaluation.riskRewardRatio.toString(),
+      indicatorSnapshot: evaluation.indicatorSnapshot,
+      dataFrom: chronological[0].timestamp,
+      dataTo: mostRecent.timestamp,
+      barCount: chronological.length,
+      dataQuality: 'fresh',
     });
   }
 }

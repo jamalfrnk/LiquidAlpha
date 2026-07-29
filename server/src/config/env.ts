@@ -25,6 +25,23 @@ const envSchema = z.object({
   HYPERLIQUID_API_URL: z.string().url().default('https://api.hyperliquid.xyz'),
   HYPERLIQUID_API_KEY: z.string().optional(),
   COINGECKO_API_KEY: z.string().optional(),
+
+  // Wallet-signature auth. JWT_SECRET has no default -- unlike the deleted
+  // auth.ts, which fell back to a hardcoded string when unset, this fails
+  // startup instead so a misconfigured deployment can never silently sign
+  // forgeable tokens.
+  JWT_SECRET: z
+    .string({ required_error: 'JWT_SECRET is required (used to sign session tokens).' })
+    .min(32, 'JWT_SECRET must be at least 32 characters.'),
+  // The domain bound into the signed login message (SIWE-style). Prevents a
+  // signature obtained by a phishing site presenting the same message text
+  // from being valid here. Must match wherever the client is actually served.
+  AUTH_DOMAIN: z.string().min(1).default('localhost:3001'),
+  NONCE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // Comma-separated list of allowed CORS origins. Unset falls back to
+  // common local-dev client ports (see server.ts) -- never a wildcard.
+  CORS_ORIGIN: z.string().optional(),
 });
 
 function loadEnv() {

@@ -1,6 +1,7 @@
 import { env } from './config/env';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { db, connectDb } from './db/index';
 import { markets, signals } from './db/schema';
@@ -12,6 +13,7 @@ import { desc, eq } from 'drizzle-orm';
 import { validate } from './middleware/validate';
 import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
 import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
+import { authRouter } from './auth/router';
 
 /**
  * Main server module for LiquidAlpha.
@@ -27,12 +29,19 @@ import { FundingRateParamsSchema, type FundingRateParams } from './schemas/marke
  * type‑annotated strings to help clients distinguish message types.
  */
 
-// Create the Express application.  Apply CORS and JSON body parsing
-// middleware.  CORS is open by default here; you may restrict it via
-// the `origin` option in production.
+// Create the Express application. CORS must be an explicit allowlist, not
+// wide open -- this now carries a cookie-based session, and an open
+// `origin: true`/`*` policy combined with `credentials: true` would let any
+// site read authenticated responses on a signed-in user's behalf. Configure
+// real origins via CORS_ORIGIN (comma-separated) in non-local environments.
+const corsOrigins = env.CORS_ORIGIN
+  ? env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+  : ['http://localhost:3000', 'http://localhost:5173'];
 const app = express();
-app.use(cors());
+app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+app.use('/api/auth', authRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
 // exceptions.  Without this, asynchronous errors may cause the Node.js

@@ -9,6 +9,9 @@ import { generateSignals } from './technical-analysis';
 import { getFundingRate } from './hyperliquid-real';
 import { wrapAsync, installProcessErrorHandlers } from './bootstrap';
 import { desc, eq } from 'drizzle-orm';
+import { validate } from './middleware/validate';
+import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
+import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
 
 /**
  * Main server module for LiquidAlpha.
@@ -224,8 +227,8 @@ app.get('/api/signals', wrapAsync(async (_req, res) => {
 // a single asset.  If `symbol` is not provided, signals for all
 // supported assets will be generated.  After generation the new
 // signals are returned in the response.
-app.post('/api/signals/generate', wrapAsync(async (req, res) => {
-  const { symbol } = req.body as { symbol?: string };
+app.post('/api/signals/generate', validate('body', GenerateSignalsRequestSchema), wrapAsync(async (req, res) => {
+  const { symbol } = req.body as GenerateSignalsRequest;
   // If a symbol is supplied we could implement a filtered generator,
   // however the current generateSignals implementation processes all
   // assets.  This branch is reserved for future custom logic.
@@ -258,8 +261,8 @@ app.get('/api/stats', wrapAsync(async (_req, res) => {
 // Fetch the current funding rate for a given symbol.  This route
 // proxies the request through the Hyperliquid API wrapper.  The
 // returned object includes `time`, `coin` and `fundingRate` fields.
-app.get('/api/funding/:symbol', wrapAsync(async (req, res) => {
-  const { symbol } = req.params as { symbol: string };
+app.get('/api/funding/:symbol', validate('params', FundingRateParamsSchema), wrapAsync(async (req, res) => {
+  const { symbol } = req.params as unknown as FundingRateParams;
   try {
     const rate = await getFundingRate(symbol);
     res.json(rate);

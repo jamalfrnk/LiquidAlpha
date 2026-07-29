@@ -9,7 +9,7 @@ import { addPricePoints } from './price-history';
 import { generateSignals } from './technical-analysis';
 import { getFundingRate } from './hyperliquid-real';
 import { wrapAsync, installProcessErrorHandlers } from './bootstrap';
-import { desc, eq } from 'drizzle-orm';
+import { count, desc, eq } from 'drizzle-orm';
 import { validate } from './middleware/validate';
 import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
 import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
@@ -256,14 +256,16 @@ app.post('/api/signals/generate', validate('body', GenerateSignalsRequestSchema)
 // total signals and the number of active signals.  Additional metrics
 // (e.g. average confidence) can be added in the future.
 app.get('/api/stats', wrapAsync(async (_req, res) => {
-  const total = await db.select().from(signals);
-  const active = await db
-    .select()
+  // Aggregate counts server-side instead of fetching every row just to
+  // measure .length -- was a full-table transfer on every hit (GH F-8).
+  const [{ total }] = await db.select({ total: count() }).from(signals);
+  const [{ active }] = await db
+    .select({ active: count() })
     .from(signals)
-    .where(eq(signals.active, true));
+    .where(eq(signals.status, 'ACTIVE'));
   res.json({
-    totalSignals: total.length,
-    activeSignals: active.length,
+    totalSignals: total,
+    activeSignals: active,
   });
 }));
 

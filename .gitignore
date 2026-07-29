@@ -6,6 +6,3 @@ node_modules/
 
 # Build output
 server/dist/
-
-# Drizzle generated files
-drizzle/

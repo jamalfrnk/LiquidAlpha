@@ -80,7 +80,7 @@ export async function generateSignals(): Promise<void> {
       asset: symbol,
       signalType,
       confidence: confidence.toString(),
-      active: true,
+      status: 'ACTIVE',
     });
   }
 }

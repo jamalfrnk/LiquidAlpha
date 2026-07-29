@@ -1,19 +1,15 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
-import { config as loadEnv } from 'dotenv';
-
-// Load environment variables from .env file
-loadEnv();
+import { env } from '../config/env';
 
 /**
  * Initializes and exports a configured Drizzle database instance.
  *
- * The 'drizzle-orm' library uses a PostgreSQL client. The environment variable DATABASE_URL
- * must be defined in the .env file. The non-null assertion '!' ensures TypeScript knows
- * that the variable exists at runtime.
+ * DATABASE_URL is validated at startup by config/env.ts, so it's guaranteed
+ * to exist here without a non-null assertion.
  */
 const client = new Client({
-'connectionString': process.env.DATABASE_URL!,
+  connectionString: env.DATABASE_URL,
 });
 
 // Create the drizzle database instance with the PostgreSQL client.

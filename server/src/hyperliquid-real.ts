@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { env } from './config/env';
 
 /**
  * Hyperliquid RPC wrapper.
@@ -9,9 +10,9 @@ import { z } from 'zod';
  * data formats.
  */
 
-// Base URL for Hyperliquid API calls.  You may override this via the
-// environment variable HYPERLIQUID_API_URL.
-const HL_RPC = process.env.HYPERLIQUID_API_URL ?? 'https://api.hyperliquid.xyz';
+// Base URL for Hyperliquid API calls.  Override via the HYPERLIQUID_API_URL
+// environment variable (validated in config/env.ts).
+const HL_RPC = env.HYPERLIQUID_API_URL;
 
 /**
  * Schema describing a funding rate request.  The Hyperliquid API expects

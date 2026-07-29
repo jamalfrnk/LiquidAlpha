@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser';
 import { WebSocketServer, WebSocket } from 'ws';
 import { db, connectDb } from './db/index';
 import { markets, signals } from './db/schema';
-import { addPricePoints } from './price-history';
 import { generateSignals } from './technical-analysis';
 import { getFundingRate } from './hyperliquid-real';
 import { wrapAsync, installProcessErrorHandlers } from './bootstrap';
@@ -14,6 +13,7 @@ import { validate } from './middleware/validate';
 import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
 import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
 import { authRouter } from './auth/router';
+import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
 
 /**
  * Main server module for LiquidAlpha.
@@ -99,88 +99,6 @@ wss.on('connection', (ws) => {
 });
 
 /**
- * Fetch live market data from a third‑party provider.
- *
- * This function calls the CoinGecko simple price API to retrieve
- * current prices, 24‑hour percentage changes and volumes for BTC,
- * ETH and SOL.  CoinGecko’s API is free and requires no API key for
- * basic endpoints.  If you have a premium key you can store it in
- * COINGECKO_API_KEY and set it as a header below.  See
- * https://www.coingecko.com/en/api/documentation for details.
- *
- * @returns an object keyed by uppercase symbol containing price,
- *          24h change and volume values; undefined on failure
- */
-interface CoinGeckoSimplePriceResponse {
-  bitcoin: { usd: number; usd_24h_change: number; usd_24h_vol: number };
-  ethereum: { usd: number; usd_24h_change: number; usd_24h_vol: number };
-  solana: { usd: number; usd_24h_change: number; usd_24h_vol: number };
-}
-
-async function fetchMarketData() {
-  try {
-    const ids = ['bitcoin', 'ethereum', 'solana'];
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`CoinGecko response ${res.status}`);
-    }
-    const data = (await res.json()) as CoinGeckoSimplePriceResponse;
-    // Map CoinGecko ids to our symbols and return the relevant fields
-    return {
-      BTC: {
-        price: data.bitcoin.usd,
-        change24h: data.bitcoin.usd_24h_change,
-        volume: data.bitcoin.usd_24h_vol,
-      },
-      ETH: {
-        price: data.ethereum.usd,
-        change24h: data.ethereum.usd_24h_change,
-        volume: data.ethereum.usd_24h_vol,
-      },
-      SOL: {
-        price: data.solana.usd,
-        change24h: data.solana.usd_24h_change,
-        volume: data.solana.usd_24h_vol,
-      },
-    };
-  } catch (err) {
-    console.error('Failed to fetch market data', err);
-    return undefined;
-  }
-}
-
-/**
- * Periodically update market data.
- *
- * This function is invoked every 10 seconds to fetch the latest prices
- * from CoinGecko and persist them in the database.  It also records
- * price observations into the priceHistory table and broadcasts updates
- * to connected WebSocket clients.  If fetching fails, the error is
- * logged but the function does not throw; it will retry on the next
- * interval.
- */
-async function updateMarkets() {
-  const data = await fetchMarketData();
-  if (!data) return;
-  const timestamp = new Date();
-  for (const symbol of Object.keys(data) as Array<keyof typeof data>) {
-    const { price, change24h, volume } = data[symbol];
-    // Insert snapshot into markets table
-    await db.insert(markets).values({
-      symbol,
-      price: price.toString(),
-      change24h: change24h.toString(),
-      volume: volume.toString(),
-    });
-    // Record price point into history
-    await addPricePoints([{ symbol, price, timestamp }]);
-    // Broadcast the market update
-    broadcast('marketUpdate', { symbol, price, change24h, volume, timestamp });
-  }
-}
-
-/**
  * Periodically generate trading signals.
  *
  * Every 30 seconds this function invokes the signal generator to
@@ -199,7 +117,7 @@ async function updateSignals() {
 }
 
 // Kick off background tasks with specified intervals
-setInterval(updateMarkets, 10_000);
+setInterval(() => runIngestionCycle(broadcast), 10_000);
 setInterval(updateSignals, 30_000);
 
 /**
@@ -209,14 +127,33 @@ setInterval(updateSignals, 30_000);
 // Fetch the latest market snapshots (most recent 50 entries).  The results
 // are ordered by updatedAt descending so that the newest entries appear
 // first.  In practice, you might want to limit results per symbol.
+//
+// Each row carries a `stale` flag rather than leaving clients to guess
+// whether a price is current -- true once updatedAt is older than
+// STALE_AFTER_MS (three missed ingestion cycles), which is what happens
+// when the feed degrades instead of a fabricated price silently taking
+// its place.
 app.get('/api/markets', wrapAsync(async (_req, res) => {
   const rows = await db
     .select()
     .from(markets)
     .orderBy(desc(markets.updatedAt))
     .limit(50);
-  res.json(rows);
+  const now = Date.now();
+  res.json(
+    rows.map((row) => ({
+      ...row,
+      stale: now - row.updatedAt.getTime() > STALE_AFTER_MS,
+    })),
+  );
 }));
+
+// Reports whether the market-data ingestion loop is currently healthy --
+// i.e. whether CoinGecko fetches have been succeeding -- distinct from
+// whether any individual market row happens to be stale.
+app.get('/api/market-data/health', (_req, res) => {
+  res.json(getIngestionHealth());
+});
 
 // Retrieve all generated signals.  In a future version this endpoint
 // could accept query parameters to filter by asset, date range or

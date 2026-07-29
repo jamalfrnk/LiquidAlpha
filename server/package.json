@@ -1,7 +1,6 @@
 {
   "name": "liquidalpha-server",
   "version": "0.1.0",
-  "type": "module",
   "description": "Backend for the LiquidAlpha trading signal dashboard",
   "scripts": {
     "dev": "tsx watch src/server.ts",

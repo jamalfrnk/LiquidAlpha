@@ -12,7 +12,9 @@ import { count, desc, eq } from 'drizzle-orm';
 import { validate } from './middleware/validate';
 import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
 import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
+import { PaginationQuerySchema, type PaginationQuery } from './schemas/pagination';
 import { authRouter } from './auth/router';
+import { apiLimiter } from './middleware/rateLimit';
 import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
 
 /**
@@ -41,6 +43,7 @@ const app = express();
 app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
@@ -125,8 +128,9 @@ setInterval(updateSignals, 30_000);
  */
 
 // Fetch the latest market snapshots (most recent 50 entries).  The results
-// are ordered by updatedAt descending so that the newest entries appear
-// first.  In practice, you might want to limit results per symbol.
+// `markets` holds exactly one row per symbol (upserted by the ingestion
+// cycle -- see market-data/ingestion.ts), so this is always small and
+// needs no pagination.
 //
 // Each row carries a `stale` flag rather than leaving clients to guess
 // whether a price is current -- true once updatedAt is older than
@@ -134,11 +138,7 @@ setInterval(updateSignals, 30_000);
 // when the feed degrades instead of a fabricated price silently taking
 // its place.
 app.get('/api/markets', wrapAsync(async (_req, res) => {
-  const rows = await db
-    .select()
-    .from(markets)
-    .orderBy(desc(markets.updatedAt))
-    .limit(50);
+  const rows = await db.select().from(markets).orderBy(markets.symbol);
   const now = Date.now();
   res.json(
     rows.map((row) => ({
@@ -155,15 +155,19 @@ app.get('/api/market-data/health', (_req, res) => {
   res.json(getIngestionHealth());
 });
 
-// Retrieve all generated signals.  In a future version this endpoint
-// could accept query parameters to filter by asset, date range or
-// confidence threshold.  Signals are ordered by creation time
-// descending.
-app.get('/api/signals', wrapAsync(async (_req, res) => {
+// Retrieve generated signals, paginated (default 50, max 100 per page --
+// this had no limit at all before, so it returned every signal ever
+// generated on every call). In a future version this endpoint could also
+// accept filters by asset, date range, or confidence threshold. Signals
+// are ordered by creation time descending.
+app.get('/api/signals', validate('query', PaginationQuerySchema), wrapAsync(async (req, res) => {
+  const { limit, offset } = req.query as unknown as PaginationQuery;
   const rows = await db
     .select()
     .from(signals)
-    .orderBy(desc(signals.createdAt));
+    .orderBy(desc(signals.createdAt))
+    .limit(limit)
+    .offset(offset);
   res.json(rows);
 }));
 

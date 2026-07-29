@@ -1,12 +1,20 @@
 import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, pgEnum } from 'drizzle-orm/pg-core';
 
 /**
- * The `markets` table stores current market data for each trading pair we support.
- * Each record is identified by a UUID and includes the symbol, price, volume, 24h change, and update timestamp.
+ * The `markets` table holds the *current* snapshot for each trading pair --
+ * one row per symbol, updated in place. `symbol` is unique specifically so
+ * ingestion can upsert rather than insert: this table used to gain a new
+ * row every ~10s forever (the same unbounded-growth bug price_history had,
+ * GH F-7), and worse, "current price" was being approximated by
+ * `ORDER BY updated_at DESC LIMIT 50` across all symbols combined, which
+ * stops reliably returning one row per symbol as soon as enough history
+ * accumulates. Historical time-series data belongs in `price_history`,
+ * which already models it correctly (append-only, queried with a bounded
+ * per-symbol limit).
  */
 export const markets = pgTable('markets', {
   id: uuid('id').defaultRandom().primaryKey(),
-  symbol: varchar('symbol', { length: 10 }).notNull(),
+  symbol: varchar('symbol', { length: 10 }).notNull().unique(),
   price: numeric('price').notNull(),
   volume: numeric('volume').notNull(),
   change24h: numeric('change_24h').notNull(),

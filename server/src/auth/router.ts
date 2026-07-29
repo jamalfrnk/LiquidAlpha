@@ -6,6 +6,7 @@ import { env } from '../config/env';
 import { wrapAsync } from '../bootstrap';
 import { validate } from '../middleware/validate';
 import { requireAuth } from '../middleware/requireAuth';
+import { authLimiter } from '../middleware/rateLimit';
 import { NonceRequestSchema, VerifyRequestSchema } from '../schemas/auth';
 import { normalizeAddress } from './address';
 import { issueNonce, consumeNonce } from './nonce';
@@ -19,6 +20,7 @@ export const authRouter = Router();
 
 authRouter.post(
   '/nonce',
+  authLimiter,
   validate('body', NonceRequestSchema),
   wrapAsync(async (req, res) => {
     const { address: rawAddress, chain } = req.body as { address: string; chain: 'evm' | 'solana' };
@@ -40,6 +42,7 @@ authRouter.post(
 
 authRouter.post(
   '/verify',
+  authLimiter,
   validate('body', VerifyRequestSchema),
   wrapAsync(async (req, res) => {
     const { address: rawAddress, chain, signature } = req.body as {

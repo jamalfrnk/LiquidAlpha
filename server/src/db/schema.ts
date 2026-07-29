@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, numeric, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, pgEnum } from 'drizzle-orm/pg-core';
 
 /**
  * The `markets` table stores current market data for each trading pair we support.
@@ -14,43 +14,75 @@ export const markets = pgTable('markets', {
 });
 
 /**
- * The `signals` table stores generated trading signals for a given asset. Each signal has
- * a confidence score and an active flag indicating whether the signal is still valid.
+ * A signal's lifecycle, replacing a single boolean `active` flag (or, worse,
+ * a free-text `status` column reused across unrelated entities -- the
+ * pattern found in the Replit reference app's signals/activities/positions
+ * tables). Distinct signal, order, and position lifecycles should each get
+ * their own enum when those entities exist; conflating them into one
+ * generic column is exactly what made the Replit schema hard to reason
+ * about.
  */
-export const signals = pgTable('signals', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  asset: varchar('asset', { length: 10 }).notNull(),
-  signalType: varchar('signal_type', { length: 50 }).notNull(),
-  confidence: numeric('confidence').notNull(),
-  active: boolean('active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const signalStatusEnum = pgEnum('signal_status', [
+  'DRAFT',
+  'PUBLISHED',
+  'ACTIVE',
+  'TRIGGERED',
+  'EXPIRED',
+  'CANCELLED',
+  'INVALIDATED',
+]);
+
+/**
+ * The `signals` table stores generated trading signals for a given asset. Each signal has
+ * a confidence score and a `status` reflecting where it is in its lifecycle.
+ */
+export const signals = pgTable(
+  'signals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    asset: varchar('asset', { length: 10 }).notNull(),
+    signalType: varchar('signal_type', { length: 50 }).notNull(),
+    confidence: numeric('confidence').notNull(),
+    status: signalStatusEnum('status').default('ACTIVE').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    statusCreatedAtIdx: index('signals_status_created_at_idx').on(table.status, table.createdAt),
+  }),
+);
 
 /**
  * The `priceHistory` table stores historical price points for each asset. This table is used for
  * computing technical indicators such as moving averages, RSI, and MACD. We include a `timestamp`
  * column to indicate when the price was recorded.
  */
-export const priceHistory = pgTable('price_history', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  symbol: varchar('symbol', { length: 10 }).notNull(),
-  price: numeric('price').notNull(),
-  timestamp: timestamp('timestamp').defaultNow().notNull(),
-});
+export const priceHistory = pgTable(
+  'price_history',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    symbol: varchar('symbol', { length: 10 }).notNull(),
+    price: numeric('price').notNull(),
+    timestamp: timestamp('timestamp').defaultNow().notNull(),
+  },
+  (table) => ({
+    symbolTimestampIdx: index('price_history_symbol_timestamp_idx').on(table.symbol, table.timestamp),
+  }),
+);
 
 /**
  * The `users` table tracks application users, identified by wallet address.
  * `address` is unique -- one row per wallet -- and `chain` disambiguates the
  * address namespace (EVM addresses and Solana addresses never collide in
  * practice, but the column keeps that assumption explicit rather than
- * implicit). `builderCode` is a referral/attribution label only, not a
- * substitute for `id` as an ownership key.
+ * implicit). `builderCode` is a unique referral/attribution label only,
+ * never a substitute for `id` as an ownership key -- every FK in this
+ * schema points at `users.id`, not `builderCode`.
  */
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   address: varchar('address', { length: 64 }).notNull().unique(),
   chain: varchar('chain', { length: 16 }).notNull(),
-  builderCode: varchar('builder_code', { length: 64 }).notNull(),
+  builderCode: varchar('builder_code', { length: 64 }).notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -89,7 +121,9 @@ export const sessions = pgTable(
   'sessions',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     expiresAt: timestamp('expires_at').notNull(),
     revokedAt: timestamp('revoked_at'),
@@ -104,11 +138,21 @@ export const sessions = pgTable(
  * including the profit/loss percentage of a given signal over time and whether
  * the trade is currently open. This can be used to backtest and validate the signal engine.
  */
-export const performance = pgTable('performance', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull(),
-  signalId: uuid('signal_id').notNull(),
-  pnl: numeric('pnl').notNull(),
-  isOpen: boolean('is_open').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const performance = pgTable(
+  'performance',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    signalId: uuid('signal_id')
+      .notNull()
+      .references(() => signals.id, { onDelete: 'cascade' }),
+    pnl: numeric('pnl').notNull(),
+    isOpen: boolean('is_open').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index('performance_user_id_idx').on(table.userId),
+  }),
+);

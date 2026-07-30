@@ -104,6 +104,76 @@ jobs:
           fi
         continue-on-error: true
 
+  client-build-and-checks:
+    name: client build / typecheck / lint / test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect client lockfile
+        id: detect-lock
+        run: |
+          if [ -f client/package-lock.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js (with cache)
+        if: steps.detect-lock.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Setup Node.js (no cache)
+        if: steps.detect-lock.outputs.exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies (locked)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::error::client/package-lock.json is missing. Commit a lockfile so CI installs are reproducible."
+            exit 1
+          fi
+
+      - name: Lint (if configured)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.lint ? 0 : 1)"; then
+            npm run lint
+          else
+            echo "::warning::No 'lint' script in client/package.json — skipping. Add one (e.g. ESLint) to enable this check."
+          fi
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit + integration tests (if configured)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "::warning::No 'test' script in client/package.json — skipping. No component/logic tests exist yet."
+          fi
+
+      - name: Production build
+        run: npm run build
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+        continue-on-error: true # informational until a documented triage process exists
+
   secret-scan:
     name: secret scan
     runs-on: ubuntu-latest
@@ -119,6 +189,3 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Guardrail: this repo has no client/ yet. Once one is added, add a matching job here
-  # (install/build/typecheck/lint/test/bundle-check) rather than folding it into server's job.

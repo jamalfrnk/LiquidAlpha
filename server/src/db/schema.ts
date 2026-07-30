@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, pgEnum, integer, text, jsonb } from 'drizzle-orm/pg-core';
 
 /**
  * The `markets` table holds the *current* snapshot for each trading pair --
@@ -41,8 +41,18 @@ export const signalStatusEnum = pgEnum('signal_status', [
 ]);
 
 /**
- * The `signals` table stores generated trading signals for a given asset. Each signal has
- * a confidence score and a `status` reflecting where it is in its lifecycle.
+ * The `signals` table stores generated trading signals for a given asset,
+ * along with the evidence that produced them at generation time -- so a
+ * signal's reasoning can be inspected later without re-running current
+ * market data through the code, which would just reflect today's prices,
+ * not the ones that actually triggered it (GH F-6).
+ *
+ * `ruleAlignmentScore` (not "confidence") is a heuristic count of how many
+ * technical-indicator rules agreed, weighted and versioned via
+ * `ruleVersion` -- explicitly not a calibrated probability of anything
+ * (GH F-5, Replit H-3). Whether it correlates with actual win rate is an
+ * empirical question that would require real backtesting to answer, not
+ * something to imply by calling it "confidence".
  */
 export const signals = pgTable(
   'signals',
@@ -50,8 +60,39 @@ export const signals = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     asset: varchar('asset', { length: 10 }).notNull(),
     signalType: varchar('signal_type', { length: 50 }).notNull(),
-    confidence: numeric('confidence').notNull(),
     status: signalStatusEnum('status').default('ACTIVE').notNull(),
+
+    ruleAlignmentScore: numeric('rule_alignment_score').notNull(),
+    ruleVersion: varchar('rule_version', { length: 16 }).notNull(),
+    explanation: text('explanation').notNull(),
+
+    entryPrice: numeric('entry_price').notNull(),
+    stopLoss: numeric('stop_loss').notNull(),
+    takeProfit: numeric('take_profit').notNull(),
+    riskRewardRatio: numeric('risk_reward_ratio').notNull(),
+
+    /**
+     * Raw indicator values (ema50, ema200, macdHist, rsi, adx, fisher,
+     * keltnerUpper/Lower, etc.) at generation time. A jsonb evidence blob
+     * is the right call here specifically because these are supporting
+     * values nothing needs to filter/query by in SQL -- not a case of
+     * using JSON to dodge modeling a real searchable field, which is the
+     * anti-pattern to avoid (see docs/security/SECURITY_BASELINE.md).
+     */
+    indicatorSnapshot: jsonb('indicator_snapshot').notNull(),
+
+    /**
+     * The actual span and count of price observations used. Named
+     * honestly rather than a fabricated "timeframe" label: this dataset is
+     * tick-level price history (see price-history.ts), not OHLC candles at
+     * a fixed interval, so "1h timeframe" would overstate what the data
+     * actually is.
+     */
+    dataFrom: timestamp('data_from').notNull(),
+    dataTo: timestamp('data_to').notNull(),
+    barCount: integer('bar_count').notNull(),
+    dataQuality: varchar('data_quality', { length: 16 }).notNull(),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({

@@ -136,6 +136,34 @@ export const users = pgTable('users', {
 });
 
 /**
+ * Per-user risk limits -- one row per user, created with conservative
+ * defaults on first access (see risk/limits.ts). This is the self-service
+ * counterpart to the deploy-gated GLOBAL_KILL_SWITCH env var: a user can
+ * halt their own trading (`killSwitchEnabled`) without needing anyone else
+ * to act, and set their own position/leverage/exposure caps.
+ *
+ * Enforcement against real positions/orders doesn't exist yet -- there's
+ * no execution endpoint in this repo to enforce it against (that's
+ * migration step 12). These limits are real, stored, and user-editable
+ * today; wiring them into an actual trade-submission path happens once
+ * that path exists, not before.
+ */
+export const riskLimits = pgTable('risk_limits', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  maxPositionSize: numeric('max_position_size').notNull(),
+  maxLeverage: numeric('max_leverage').notNull(),
+  maxOpenPositions: integer('max_open_positions').notNull(),
+  maxDailyLossPercent: numeric('max_daily_loss_percent').notNull(),
+  killSwitchEnabled: boolean('kill_switch_enabled').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+/**
  * The `authNonces` table backs the wallet-signature login flow: a nonce is
  * issued per (address, chain) and must be presented back, signed, before it
  * expires. Consuming a nonce deletes its row, making replay of the same

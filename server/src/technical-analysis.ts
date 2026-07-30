@@ -3,6 +3,7 @@ import { signals } from './db/schema';
 import { getPriceHistory, HISTORY_LIMIT } from './price-history';
 import { ema, macd, rsi, atr, adx, fisherTransform, keltnerChannel } from './indicators';
 import { STALE_AFTER_MS } from './market-data/ingestion';
+import { isGloballyHalted } from './risk/killSwitch';
 
 /**
  * Signal generation engine.
@@ -154,10 +155,22 @@ export function evaluateSignal(closes: number[]): SignalEvaluation | null {
  * signal from data nobody would call current), and persists the full
  * evaluation, including the evidence snapshot, for any that fire.
  *
+ * Checked against the global kill switch first: a platform-wide halt
+ * should stop new recommendations from being generated at all, not just
+ * block execution of ones that already exist -- execution doesn't exist
+ * yet in this repo, so this is the one real enforcement point available
+ * today (see risk/killSwitch.ts and risk/evaluate.ts for the rest of the
+ * risk engine, ready but not yet wired to an execution path).
+ *
  * Idempotent across calls: it does not deactivate or delete old signals;
  * consumers should interpret the most recent signal per asset as current.
  */
 export async function generateSignals(): Promise<void> {
+  if (isGloballyHalted()) {
+    console.warn('Signal generation skipped: GLOBAL_KILL_SWITCH is enabled');
+    return;
+  }
+
   const symbols = ['BTC', 'ETH', 'SOL'];
   for (const symbol of symbols) {
     const history = await getPriceHistory(symbol, HISTORY_LIMIT);

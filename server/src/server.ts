@@ -14,6 +14,7 @@ import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './sch
 import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
 import { PaginationQuerySchema, type PaginationQuery } from './schemas/pagination';
 import { authRouter } from './auth/router';
+import { riskRouter } from './risk/router';
 import { apiLimiter } from './middleware/rateLimit';
 import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
 
@@ -45,6 +46,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
+app.use('/api/risk', riskRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
 // exceptions.  Without this, asynchronous errors may cause the Node.js

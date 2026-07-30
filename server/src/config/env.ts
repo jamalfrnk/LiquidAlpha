@@ -42,6 +42,14 @@ const envSchema = z.object({
   // Comma-separated list of allowed CORS origins. Unset falls back to
   // common local-dev client ports (see server.ts) -- never a wildcard.
   CORS_ORIGIN: z.string().optional(),
+
+  // Global emergency stop for signal generation (and, once it exists,
+  // execution). Deliberately an env var rather than a runtime-toggleable
+  // DB flag: flipping it requires a deploy, which is a feature here, not
+  // a limitation -- it can't be flipped by a compromised application-level
+  // credential the way a DB row could be. Per-user kill switches (which
+  // *should* be self-service) live in risk_limits instead.
+  GLOBAL_KILL_SWITCH: z.coerce.boolean().default(false),
 });
 
 function loadEnv() {

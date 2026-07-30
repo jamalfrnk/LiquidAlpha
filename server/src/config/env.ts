@@ -50,6 +50,14 @@ const envSchema = z.object({
   // credential the way a DB row could be. Per-user kill switches (which
   // *should* be self-service) live in risk_limits instead.
   GLOBAL_KILL_SWITCH: z.coerce.boolean().default(false),
+
+  // Which execution environment order submission runs against. Defaults
+  // to paper, the only mode actually implemented today -- the execution
+  // router explicitly rejects anything else rather than silently no-op'ing
+  // or, worse, doing something unintended. Nothing in this codebase can
+  // reach a real broker: hyperliquid-real.ts never initializes a signed
+  // SDK client, by design.
+  EXECUTION_MODE: z.enum(['paper', 'testnet', 'production']).default('paper'),
 });
 
 function loadEnv() {

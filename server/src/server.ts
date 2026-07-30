@@ -15,6 +15,8 @@ import { FundingRateParamsSchema, type FundingRateParams } from './schemas/marke
 import { PaginationQuerySchema, type PaginationQuery } from './schemas/pagination';
 import { authRouter } from './auth/router';
 import { riskRouter } from './risk/router';
+import { executionRouter } from './execution/router';
+import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
 import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
 
@@ -47,6 +49,7 @@ app.use(cookieParser());
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/risk', riskRouter);
+app.use('/api/execution', executionRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
 // exceptions.  Without this, asynchronous errors may cause the Node.js
@@ -91,6 +94,9 @@ async function updateSignals() {
 // Kick off background tasks with specified intervals
 setInterval(() => runIngestionCycle((symbol, event, payload) => wsServer.publishMarketUpdate(symbol, event, payload)), 10_000);
 setInterval(updateSignals, 30_000);
+setInterval(() => {
+  sweepLimitOrders().catch((err) => console.error('Limit-order sweep failed', err));
+}, 10_000);
 
 /**
  * REST API routes

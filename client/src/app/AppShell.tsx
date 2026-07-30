@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../features/auth/AuthProvider';
+import { useMarketDataSocket } from '../features/realtime/useMarketDataSocket';
 import { NAV_ITEMS } from '../routes/nav';
 
 function truncateAddress(address: string): string {
@@ -12,6 +13,10 @@ function truncateAddress(address: string): string {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // Mounted once here, not per-page -- every screen reads the same
+  // WS-updated query cache instead of each opening its own socket.
+  useMarketDataSocket();
+
   const [location] = useLocation();
   const { user, logout } = useAuth();
 

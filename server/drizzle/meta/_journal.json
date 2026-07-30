@@ -36,6 +36,13 @@
       "when": 1785377654423,
       "tag": "0004_risk_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785379257756,
+      "tag": "0005_paper_trading_tables",
+      "breakpoints": true
     }
   ]
 }

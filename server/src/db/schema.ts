@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, pgEnum, integer, text, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, uniqueIndex, pgEnum, integer, text, jsonb } from 'drizzle-orm/pg-core';
 
 /**
  * The `markets` table holds the *current* snapshot for each trading pair --
@@ -231,5 +231,126 @@ export const performance = pgTable(
   },
   (table) => ({
     userIdIdx: index('performance_user_id_idx').on(table.userId),
+  }),
+);
+
+/**
+ * `environment` is recorded on every order and position explicitly --
+ * never left implicit -- so it's always unambiguous whether a given
+ * record executed on paper, testnet, or production. Only 'paper' is
+ * actually implemented (see execution/paperEngine.ts); testnet/production
+ * are modeled here so the schema doesn't need to change when a real
+ * broker integration eventually exists, but the execution router refuses
+ * any request that isn't 'paper' today rather than silently no-op'ing.
+ */
+export const executionEnvironmentEnum = pgEnum('execution_environment', ['paper', 'testnet', 'production']);
+
+export const orderSideEnum = pgEnum('order_side', ['LONG', 'SHORT']);
+export const orderTypeEnum = pgEnum('order_type', ['MARKET', 'LIMIT']);
+
+/**
+ * Order lifecycle, following the states the assignment calls out for a
+ * real order workflow -- distinct from signals' lifecycle (a signal is a
+ * recommendation; an order is a user's actual instruction to act on one,
+ * conflating the two was exactly the anti-pattern in both source repos'
+ * generic `status` columns).
+ */
+export const orderStatusEnum = pgEnum('order_status', [
+  'PENDING_CONFIRMATION',
+  'SUBMITTED',
+  'ACKNOWLEDGED',
+  'PARTIALLY_FILLED',
+  'FILLED',
+  'CANCEL_PENDING',
+  'CANCELLED',
+  'REJECTED',
+  'FAILED',
+]);
+
+/**
+ * `orders` is where user-submitted trade instructions live.
+ * `idempotencyKey` + the unique (user_id, idempotency_key) index is what
+ * actually prevents duplicate submission -- enforced by Postgres itself,
+ * not just an application-level check-then-insert that a race condition
+ * could slip past (see execution/paperEngine.ts, which relies on catching
+ * the unique-violation rather than checking-then-inserting).
+ */
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    asset: varchar('asset', { length: 10 }).notNull(),
+    side: orderSideEnum('side').notNull(),
+    orderType: orderTypeEnum('order_type').notNull(),
+    quantity: numeric('quantity').notNull(),
+    limitPrice: numeric('limit_price'),
+    leverage: numeric('leverage').notNull(),
+    status: orderStatusEnum('status').default('SUBMITTED').notNull(),
+    rejectionReason: text('rejection_reason'),
+    environment: executionEnvironmentEnum('environment').notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 128 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index('orders_user_id_idx').on(table.userId),
+    userIdempotencyIdx: uniqueIndex('orders_user_idempotency_idx').on(table.userId, table.idempotencyKey),
+  }),
+);
+
+/** A (partial or full) execution of an order. Paper fills are always full-quantity today (see paperEngine.ts). */
+export const fills = pgTable(
+  'fills',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    price: numeric('price').notNull(),
+    quantity: numeric('quantity').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    orderIdIdx: index('fills_order_id_idx').on(table.orderId),
+  }),
+);
+
+export const positionStatusEnum = pgEnum('position_status', ['OPEN', 'CLOSED', 'LIQUIDATED']);
+
+/**
+ * A user's net position per asset. Scoped simply for this first version:
+ * at most one open position per (user, asset); an order in the same
+ * direction as an existing open position increases it (quantity-weighted
+ * average entry price); an order in the opposite direction is rejected
+ * rather than netted/flipped (see execution/paperEngine.ts) -- full
+ * position netting is real complexity worth getting right deliberately,
+ * not rushing into this same change.
+ */
+export const positions = pgTable(
+  'positions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    asset: varchar('asset', { length: 10 }).notNull(),
+    side: orderSideEnum('side').notNull(),
+    quantity: numeric('quantity').notNull(),
+    entryPrice: numeric('entry_price').notNull(),
+    stopLoss: numeric('stop_loss'),
+    takeProfit: numeric('take_profit'),
+    status: positionStatusEnum('status').default('OPEN').notNull(),
+    environment: executionEnvironmentEnum('environment').notNull(),
+    realizedPnl: numeric('realized_pnl'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    closedAt: timestamp('closed_at'),
+  },
+  (table) => ({
+    userIdIdx: index('positions_user_id_idx').on(table.userId),
+    userAssetIdx: index('positions_user_asset_idx').on(table.userId, table.asset),
   }),
 );

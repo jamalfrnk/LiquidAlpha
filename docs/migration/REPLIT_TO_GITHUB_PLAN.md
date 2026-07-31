@@ -49,18 +49,23 @@ New client from scratch (none exists in GitHub). Use Replit's `features/trade`/`
 
 ### 14. Signal and execution UX — `feat/signal-execution-ux`
 Signal cards distinguishing new/expired/triggered/cancelled/invalidated states (from the step-6 state machine), execution confirmation screen showing every field the assignment lists (market, direction, size, leverage, stop/target, fees, max loss, environment, auto-trade status). **Depends on: steps 10, 11, 12, 13.**
+**Status (2026-07-31): 2 of 3 client PRs done** (`feat/signals-ux` PR #16, `feat/positions-ux` PR #17). Remaining: Settings screen (risk-limits editable form) — tracked as [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) (`UI-014C`).
 
 ### 15. Analytics integrity — `feat/analytics-integrity`
 Every metric shown must state its definition, source, date range, sample size, and whether it's backtest/paper/live (assignment requirement). This directly replaces Replit's `Math.random()`-generated Sharpe ratio/max drawdown (C-5) with "insufficient data" states until real closed-trade history exists in volume. **Depends on: step 12 generating real paper-trade history to eventually report on.**
+**Status: not started.** Tracked as [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) (`DATA-015`).
 
 ### 16. Observability — `feat/observability`
 Structured logging, request IDs, health checks distinguishing process/DB/market-data/WS/execution-provider health (assignment requirement) — none of this exists in either repo today. **Depends on: most of the above being in place to have something worth observing.**
+**Status: not started.** Tracked as [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) (`OBS-016`).
 
 ### 17. Security tests — `test/security-suite`
 Nonce replay, expired-nonce rejection, cross-user resource access (regression test for Replit C-2 specifically), CSRF, oversized WS payloads, rate-limit enforcement. **Depends on: steps 5, 9, 11.**
+**Status: not started.** Tracked as [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) (`SEC-017`).
 
 ### 18. Documentation and cleanup
 Final pass — update all docs to match what was actually built (not what was planned), known-limitations doc, remaining tech debt doc.
+**Status: not started.** Tracked as [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) (`DOC-018`).
 
 ## Reusable Replit components (summary — see `REPOSITORY_COMPARISON.md` for full detail)
 `auth-system.ts`'s nonce/signature core, `hyperliquid-real.ts`'s validation/retry pattern, `simAdapter-new.ts`'s slippage/fill model, the dead `technical-analysis.ts`'s Fisher/ADX/Keltner math, `lib/cache.ts`'s TTL+single-flight pattern, the `features/trade`/`features/markets` hook shape.

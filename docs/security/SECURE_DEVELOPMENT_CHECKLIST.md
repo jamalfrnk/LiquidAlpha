@@ -13,6 +13,10 @@ when writing code, not only when reviewing it.
       SQL.
 - [ ] Any endpoint or query that returns or mutates user-owned data filters by the
       **authenticated** user's ID server-side, not a client-supplied ID.
+      Regression-tested for `execution/paperEngine.ts`'s `cancelOrder`/`closePosition`
+      in `server/src/execution/paperEngine.test.ts` (issue #21) — extend this pattern to
+      any new user-owned-resource endpoint rather than assuming ownership checks are
+      covered project-wide.
 - [ ] Passwords are hashed (bcrypt, as in `server/src/auth.ts`) — never stored or logged
       in plaintext.
 - [ ] JWT secret comes from `JWT_SECRET` with no usable fallback in any environment that
@@ -23,6 +27,9 @@ when writing code, not only when reviewing it.
       users can reach it.
 - [ ] Rate limiting exists on authentication endpoints (register/login) and any endpoint
       that triggers external API calls or signal generation on demand.
+      `authLimiter`/`apiLimiter`'s actual configured thresholds (20 and 300 per 15 min)
+      are regression-tested end-to-end in `server/src/middleware/rateLimit.test.ts`
+      (issue #21) — a new limiter should get equivalent coverage, not just be mounted.
 - [ ] Error responses sent to clients never include stack traces, internal file paths, or
       raw upstream error bodies.
 - [ ] Logs never contain passwords, tokens, full JWTs, or raw request bodies for
@@ -45,6 +52,10 @@ when writing code, not only when reviewing it.
       opaque hex payloads where a structured/typed request is possible).
 - [ ] Nonces (if introduced for auth or transaction flows) are single-use, expire, and are
       bound to the intended domain/chain to prevent replay.
+      Single-use + expiry is regression-tested for the wallet-auth nonce in
+      `server/src/auth/nonce.test.ts` (issue #21), including a same-nonce-twice replay
+      case; a new nonce-consuming flow needs its own equivalent test, not a reference to
+      this one.
 - [ ] RPC URLs, contract addresses, chain IDs, and destination addresses are validated
       against an allowlist rather than accepted as arbitrary input.
 - [ ] Market data feeding a signal or trade decision has explicit staleness handling —

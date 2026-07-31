@@ -48,6 +48,37 @@ Consolidates the security-relevant findings from both audits into one checklist-
 | Kill switch (global/per-user) | ❌ Missing in both | Net-new — migration step 11 |
 | Reconciliation after ambiguous responses | ❌ Missing in both | Net-new — migration step 12 |
 
+## Security Test Suite (migration step 17, issue #21)
+
+Added 2026-07-31 (`test/security-suite` branch): regression tests proving the controls
+below actually reject the traffic they're supposed to, not just that the code exists.
+No live Postgres is available in this environment, so `server/src/auth/nonce.ts` and
+`server/src/execution/paperEngine.ts` (both embed `db` calls directly) are tested
+against a minimal Drizzle-chain mock (`server/src/test-utils/dbMock.ts`) rather than a
+real database — this proves the branching logic, not Postgres's own atomicity
+guarantees.
+
+- **Nonce replay/expiry** (`server/src/auth/nonce.test.ts`): consuming the same nonce
+  twice fails the second time; a nonce past its stored `expiresAt` is rejected even
+  though a row existed. Closes the "Nonce expiration ❌ Missing" gap this table listed
+  above — nonce TTL enforcement (`consumeNonce`'s expiry check) is now regression-tested,
+  not just present in code.
+- **Cross-user resource access** (`server/src/execution/paperEngine.test.ts`): user A
+  cannot cancel user B's order or close user B's position (`ForbiddenError`), with a
+  positive-control case proving the owning user still succeeds — directly regression-tests
+  the "Broken access control" row above (the exact IDOR class flagged as Replit C-2).
+- **Rate-limit enforcement** (`server/src/middleware/rateLimit.test.ts`): a real
+  in-process Express server proves `authLimiter` (20/15min) and `apiLimiter` (300/15min)
+  actually return 429 once exceeded, not just that the middleware is mounted.
+- **WS private-channel authorization**: already covered by the pre-existing
+  `server/src/websocket/server.test.ts` test ("rejects a subscribe to the private user
+  channel without authentication") plus the protocol schema having no client-suppliable
+  user-id field — not duplicated in this pass.
+- **Out of scope for this pass**: CSRF (SameSite cookie configuration was not
+  independently re-audited here) and oversized-WS-payload handling (already enforced by
+  `ws`'s own `maxPayload` option — a library-level guarantee, not custom logic to
+  regression-test).
+
 ## CI/CD Security Tooling Plan (`chore/ci-foundation`, PR #2)
 
 - `.github/workflows/ci.yml`: install (lockfile-pinned) → format check → lint → typecheck → unit tests → integration tests → build.

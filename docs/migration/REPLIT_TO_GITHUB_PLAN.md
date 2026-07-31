@@ -61,7 +61,7 @@ Structured logging, request IDs, health checks distinguishing process/DB/market-
 
 ### 17. Security tests — `test/security-suite`
 Nonce replay, expired-nonce rejection, cross-user resource access (regression test for Replit C-2 specifically), CSRF, oversized WS payloads, rate-limit enforcement. **Depends on: steps 5, 9, 11.**
-**Status: not started.** Tracked as [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) (`SEC-017`).
+**Status (2026-07-31): done**, scoped down from the original CSRF/oversized-payload list per [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) (`SEC-017`) — see `docs/security/SECURITY_BASELINE.md`'s "Security Test Suite" section for exactly what's covered and what was deliberately left out with rationale.
 
 ### 18. Documentation and cleanup
 Final pass — update all docs to match what was actually built (not what was planned), known-limitations doc, remaining tech debt doc.

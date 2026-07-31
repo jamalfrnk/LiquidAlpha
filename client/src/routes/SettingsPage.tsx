@@ -1,12 +1,13 @@
-import { Settings as SettingsIcon } from 'lucide-react';
-import { PlaceholderPage } from '../components/PlaceholderPage';
+import { RiskLimitsForm } from '../features/settings/RiskLimitsForm';
 
 export function SettingsPage() {
   return (
-    <PlaceholderPage
-      icon={SettingsIcon}
-      title="Settings is coming next"
-      description="Risk limits (position size, leverage, max open positions, personal kill switch) already work end to end on the backend. The editable form for them is the next build."
-    />
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div>
+        <h1 className="font-display text-3xl font-medium tracking-tight text-ink-primary">Settings</h1>
+        <p className="mt-1 text-sm text-ink-secondary">Risk limits enforced on every order, before it's ever submitted.</p>
+      </div>
+      <RiskLimitsForm />
+    </div>
   );
 }

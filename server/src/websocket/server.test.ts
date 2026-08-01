@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { describe, it, expect, afterEach } from 'vitest';
 import WebSocket from 'ws';
 import { createMarketDataWsServer, type MarketDataWsServer } from './server';
@@ -12,10 +13,13 @@ import { createMarketDataWsServer, type MarketDataWsServer } from './server';
  */
 
 let server: MarketDataWsServer | undefined;
+let httpServer: http.Server | undefined;
 
 afterEach(() => {
   server?.close();
   server = undefined;
+  httpServer?.close();
+  httpServer = undefined;
 });
 
 function connect(port: number): Promise<WebSocket> {
@@ -160,5 +164,45 @@ describe('MarketDataWsServer (real socket, no DB)', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     expect(server.getMetrics().totalSubscriptions).toBe(0);
+  });
+});
+
+describe('MarketDataWsServer attached to a shared http.Server (DEPLOY-001 production mode)', () => {
+  function listen(srv: http.Server): Promise<number> {
+    return new Promise((resolve) => {
+      srv.listen(0, () => {
+        const addr = srv.address();
+        if (typeof addr === 'string' || addr === null) throw new Error('expected a TCP address');
+        resolve(addr.port);
+      });
+    });
+  }
+
+  it('accepts a WebSocket upgrade on the same port as a plain HTTP server, instead of opening its own', async () => {
+    httpServer = http.createServer((_req, res) => res.end('http still works'));
+    const port = await listen(httpServer);
+    server = createMarketDataWsServer(httpServer);
+
+    // The plain HTTP path on this same port is untouched by attaching WS.
+    const httpRes = await fetch(`http://localhost:${port}/`);
+    expect(await httpRes.text()).toBe('http still works');
+
+    const client = await connect(port);
+    client.send(JSON.stringify({ type: 'subscribe', channel: 'markets', symbol: 'ETH' }));
+    await new Promise((r) => setTimeout(r, 50));
+
+    server.publishMarketUpdate('ETH', 'marketUpdate', { price: 3000 });
+    const message = await nextMessage(client);
+    expect(message).toMatchObject({ event: 'marketUpdate', channel: 'markets', symbol: 'ETH', payload: { price: 3000 } });
+
+    client.close();
+  });
+
+  it('reports the shared server\'s bound port from address(), not a second port', async () => {
+    httpServer = http.createServer();
+    const port = await listen(httpServer);
+    server = createMarketDataWsServer(httpServer);
+
+    expect(server.address()).toBe(port);
   });
 });

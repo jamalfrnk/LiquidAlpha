@@ -19,6 +19,12 @@ interface AuthContextValue {
   dismissAccountChangedNotice: () => void;
   /** Every EVM provider currently detected via EIP-6963. */
   eip6963Providers: EIP6963ProviderDetail[];
+  /**
+   * The connected wallet's current chain, informational only -- this is a
+   * paper-trading platform, so a chain change never forces a network
+   * switch or blocks anything; it's exposed purely for display.
+   */
+  chainId: string | null;
   login: (providerDetail: EIP6963ProviderDetail) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -31,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [accountChangedNotice, setAccountChangedNotice] = useState<string | null>(null);
+  const [chainId, setChainId] = useState<string | null>(null);
   const [selectedRdns, setSelectedRdns] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : window.localStorage.getItem(SELECTED_WALLET_RDNS_KEY),
   );
@@ -61,6 +68,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!activeProviderDetail || !user) return;
     const { provider } = activeProviderDetail;
 
+    // Attaching a chainChanged listener only reports *future* changes --
+    // read the current value once up front so `chainId` isn't null until
+    // the first switch.
+    provider.request({ method: 'eth_chainId' }).then(
+      (id) => setChainId(id as string),
+      () => {
+        /* best-effort only -- an unresponsive provider here shouldn't block anything */
+      },
+    );
+
     function handleAccountsChanged(accounts: unknown) {
       const list = accounts as string[];
       if (list.length === 0) {
@@ -85,12 +102,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void logout();
     }
 
+    // Informational only -- paper trading has no on-chain execution to
+    // protect, so a chain switch never blocks anything or forces a
+    // network change; the UI can display it, nothing more.
+    function handleChainChanged(newChainId: unknown) {
+      setChainId(newChainId as string);
+    }
+
     provider.on('accountsChanged', handleAccountsChanged);
     provider.on('disconnect', handleDisconnect);
+    provider.on('chainChanged', handleChainChanged);
 
     return () => {
       provider.removeListener('accountsChanged', handleAccountsChanged);
       provider.removeListener('disconnect', handleDisconnect);
+      provider.removeListener('chainChanged', handleChainChanged);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- logout is stable (closes over refs only); re-subscribing on it would churn listeners every render for no benefit.
   }, [activeProviderDetail, user, queryClient]);
@@ -142,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accountChangedNotice,
         dismissAccountChangedNotice: () => setAccountChangedNotice(null),
         eip6963Providers,
+        chainId,
         login,
         logout,
       }}

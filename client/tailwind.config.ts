@@ -46,7 +46,11 @@ export default {
         ink: {
           primary: '#F2F1F7',
           secondary: '#B4B2C6',
-          muted: '#726F8C',
+          // Was #726F8C -- 3.81:1 against bg-elevated, below WCAG AA's
+          // 4.5:1 minimum for normal-size text (found by the axe-core
+          // smoke test added in TEST-CLIENT-001). Same hue/saturation,
+          // +5% lightness -- 4.63:1, passes with minimal visual change.
+          muted: '#807D98',
         },
         border: {
           subtle: '#242739',

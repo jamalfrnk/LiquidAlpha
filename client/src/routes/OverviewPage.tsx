@@ -26,7 +26,9 @@ export function OverviewPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <div>
         <h1 className="font-display text-3xl font-medium tracking-tight text-ink-primary">Overview</h1>
-        <p className="mt-1 text-sm text-ink-secondary">What's happening in the market, and what risk you're carrying.</p>
+        <p className="mt-1 text-sm text-ink-secondary">
+          What's happening in the market, and what risk you're carrying.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -34,7 +36,9 @@ export function OverviewPage() {
           <CardHeader>
             <CardTitle>Market Data Feed</CardTitle>
             {health.data && (
-              <Badge variant={health.data.healthy ? 'long' : 'short'}>{health.data.healthy ? 'Healthy' : 'Degraded'}</Badge>
+              <Badge variant={health.data.healthy ? 'long' : 'short'}>
+                {health.data.healthy ? 'Healthy' : 'Degraded'}
+              </Badge>
             )}
           </CardHeader>
           <CardContent>

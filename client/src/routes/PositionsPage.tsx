@@ -9,7 +9,9 @@ export function PositionsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-display text-3xl font-medium tracking-tight text-ink-primary">Positions</h1>
-          <p className="mt-1 text-sm text-ink-secondary">Paper trading -- simulated fills, fully risk-gated, never a real exchange.</p>
+          <p className="mt-1 text-sm text-ink-secondary">
+            Paper trading -- simulated fills, fully risk-gated, never a real exchange.
+          </p>
         </div>
         <OrderTicket />
       </div>

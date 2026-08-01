@@ -19,5 +19,12 @@ export interface FullMetrics extends PreliminaryMetrics {
 
 export type PerformanceResponse =
   | { tier: 'insufficient'; sampleSize: number; windowStart: null; windowEnd: null; mode: 'paper'; metrics: null }
-  | { tier: 'preliminary'; sampleSize: number; windowStart: string; windowEnd: string; mode: 'paper'; metrics: PreliminaryMetrics }
+  | {
+      tier: 'preliminary';
+      sampleSize: number;
+      windowStart: string;
+      windowEnd: string;
+      mode: 'paper';
+      metrics: PreliminaryMetrics;
+    }
   | { tier: 'full'; sampleSize: number; windowStart: string; windowEnd: string; mode: 'paper'; metrics: FullMetrics };

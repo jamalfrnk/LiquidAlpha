@@ -25,7 +25,8 @@ export function SignalsPage() {
       <div>
         <h1 className="font-display text-3xl font-medium tracking-tight text-ink-primary">Signals</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Evidence-backed technical signals -- each preserves the indicator values and reasoning from the moment it fired.
+          Evidence-backed technical signals -- each preserves the indicator values and reasoning from the moment it
+          fired.
         </p>
       </div>
 
@@ -45,7 +46,12 @@ export function SignalsPage() {
       )}
 
       <div className="flex items-center justify-between">
-        <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+        >
           <ChevronLeft className="h-4 w-4" aria-hidden />
           Newer
         </Button>

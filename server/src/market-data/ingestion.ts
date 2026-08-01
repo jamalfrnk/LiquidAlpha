@@ -34,6 +34,26 @@ let lastAttemptAt: Date | null = null;
 let consecutiveFailures = 0;
 let lastSuccessSource: 'hyperliquid' | 'coingecko' | null = null;
 
+export interface LastKnownMarketMeta {
+  change24h: string;
+  volume: string;
+  source: 'hyperliquid' | 'coingecko';
+}
+
+/**
+ * The most recent REST-derived 24h-change/volume/source per symbol --
+ * kept so the Hyperliquid WS client (DATA-RECOVERY-001, see server.ts)
+ * can publish a fresher current-*price* update without inventing values
+ * for the fields the WS `allMids` push doesn't carry. The REST cycle
+ * above remains the sole writer of this cache and of `markets` itself;
+ * the WS path only ever reads it.
+ */
+const lastKnownMarketMeta = new Map<string, LastKnownMarketMeta>();
+
+export function getLastKnownMarketMeta(symbol: string): LastKnownMarketMeta | undefined {
+  return lastKnownMarketMeta.get(symbol);
+}
+
 /**
  * Current market-data feed health. `healthy` is false once there have been
  * 3 consecutive failed fetch attempts -- this is what a future
@@ -180,6 +200,7 @@ export async function runIngestionCycle(publishMarketUpdate: PublishMarketUpdate
       });
     await addPricePoints([{ symbol: row.symbol, price: Number(row.price), timestamp }]);
     await pruneOldPriceHistory(row.symbol);
+    lastKnownMarketMeta.set(row.symbol, { change24h: row.change24h, volume: row.volume, source: row.source });
 
     publishMarketUpdate(row.symbol, 'marketUpdate', {
       symbol: row.symbol,

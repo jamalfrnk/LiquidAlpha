@@ -1,19 +1,23 @@
-# Market Data Architecture (DATA-HL-001, issue #34)
+# Market Data Architecture (DATA-HL-001 issue #34, DATA-RECOVERY-001 issue #35)
 
 ## Status: partially implemented
 
 **Implemented:** Hyperliquid REST ingestion (mid price + 24h change/volume via
 `metaAndAssetCtxs`, funding-rate history, OHLCV candles), CoinGecko demoted to an
 explicit, clearly-labeled fallback, per-row source attribution, decimal-safe
-external boundaries.
+external boundaries. As of `DATA-RECOVERY-001`: a real shared Hyperliquid WebSocket
+connection (`allMids`) with exponential-backoff-with-jitter reconnect, silent-stall
+detection, and update coalescing; a unified `mode` (`live`/`degraded`/`fallback`/
+`unavailable`) health computation; and risk-engine gating that blocks *new* paper
+orders from filling against a CoinGecko-fallback-sourced reference price.
 
-**Deferred:** a live Hyperliquid WebSocket connection (this issue's REST-only cadence
-is 10s for prices / 60s for candles -- adequate for the mission's "near real-time ·
-refreshed every N seconds" mode, but not the shared-WS "live" mode the mission
-describes), reconnect/backoff/stale-fallback hardening, and a `MarketHealthService`
-surfacing per-symbol freshness beyond the existing `getIngestionHealth()`. All three
-are `DATA-RECOVERY-001`'s explicit scope, layered on top of the provider this issue
-delivers.
+**Deferred:** live candle updates over the WS connection (Hyperliquid's `allMids`
+channel only carries current price, not OHLCV -- a live `candle` channel subscription
+per symbol/interval is a larger follow-up, not attempted here); a dedicated
+`MarketSnapshotRepository`/`MarketEventPublisher` abstraction layer (the mission's
+suggested interface names) -- the current module boundaries (`hyperliquidWs.ts`,
+`marketHealth.ts`, `ingestion.ts`) are already separable but weren't formalized behind
+those specific interfaces, since nothing today needs the extra indirection.
 
 ## Why Hyperliquid direct-integration, not a maintained SDK
 
@@ -121,14 +125,24 @@ any client UI -- that's `CHART-001`.
 
 ## Known limitations (this issue)
 
-- **No live WebSocket feed yet.** Prices refresh every 10s via REST polling, candles
-  every 60s -- matches the mission's "near real-time, refreshed every N seconds"
-  degraded/free-tier mode, not its "live" shared-WS mode. `DATA-RECOVERY-001` adds
-  the WS client this depends on.
-- **No reconnect/backoff/stale-execution-gating.** A sustained Hyperliquid outage
-  falls back to CoinGecko for display (correctly labeled) but nothing in this issue
-  prevents a new paper order from using either source's price -- that gating is
-  `PAPER-REALISM-001`'s `PaperPricingService`, layered on top.
+- **Live WebSocket feed (implemented in `DATA-RECOVERY-001`).** A single shared
+  connection to `wss://api.hyperliquid.xyz/ws` (`hyperliquidWs.ts`) subscribes to
+  `allMids` and merges live mid-price updates into a broadcast loop that publishes
+  to connected clients every second, per tracked symbol. REST polling (10s prices,
+  60s candles) remains as the source of `change24h`/`volume`/candle history, which
+  the WS channel doesn't carry -- see `getLastKnownMarketMeta` below.
+- **Reconnect/backoff/stale-execution-gating (implemented in `DATA-RECOVERY-001`).**
+  The WS client reconnects with exponential backoff plus jitter on close/error, and
+  detects a silent stall (connection open but no message for 30s) via a reset-able
+  timer that force-terminates and reconnects. `computeMarketDataMode` (in
+  `marketHealth.ts`) combines WS health and REST ingestion health into one
+  `live | degraded | fallback | unavailable` mode, exposed on
+  `GET /api/market-data/health`. A new risk check, `checkTrustworthySource`, blocks
+  any new order (including a resting limit order becoming marketable) whose
+  reference price is CoinGecko-fallback-sourced rather than genuinely
+  Hyperliquid-sourced -- this is the "stale-execution-gating" the earlier version of
+  this doc deferred to `PAPER-REALISM-001`; that issue can still layer a richer
+  `PaperPricingService` on top, but the core safety gate already exists.
 - **Perpetuals only.** No spot-market ingestion (the mission only requires spot
   context "where the product explicitly simulates spot" -- it currently doesn't).
 - **`getFundingRate`'s existing `type: 'fundingRate'` endpoint was left untouched.**

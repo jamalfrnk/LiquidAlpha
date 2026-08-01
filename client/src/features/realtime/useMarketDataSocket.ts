@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
-import type { MarketSnapshot } from '../markets/types';
+import type { MarketSnapshot, MarketSnapshotSource } from '../markets/types';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
 const RECONNECT_DELAY_MS = 3000;
@@ -21,6 +21,7 @@ interface MarketUpdatePayload {
   price: number;
   change24h: number;
   volume: number;
+  source: MarketSnapshotSource;
   timestamp: string;
 }
 
@@ -76,16 +77,23 @@ export function useMarketDataSocket(): ConnectionStatus {
           const update = message.payload as MarketUpdatePayload;
           queryClient.setQueryData<MarketSnapshot[]>(queryKeys.marketData.list, (existing) => {
             if (!existing) return existing;
+            const index = existing.findIndex((m) => m.symbol === update.symbol);
+            const previous = index === -1 ? undefined : existing[index];
             const updatedRow: MarketSnapshot = {
-              id: existing.find((m) => m.symbol === update.symbol)?.id ?? update.symbol,
+              id: previous?.id ?? update.symbol,
               symbol: update.symbol,
               price: String(update.price),
               change24h: String(update.change24h),
               volume: String(update.volume),
               updatedAt: update.timestamp,
               stale: false,
+              source: update.source,
+              // Not carried on the WS payload (see server's publishMarketUpdate
+              // call) -- preserve whatever the last REST fetch already had
+              // rather than nulling out real metadata on every tick.
+              szDecimals: previous?.szDecimals ?? null,
+              maxLeverage: previous?.maxLeverage ?? null,
             };
-            const index = existing.findIndex((m) => m.symbol === update.symbol);
             if (index === -1) return [...existing, updatedRow];
             const next = [...existing];
             next[index] = updatedRow;

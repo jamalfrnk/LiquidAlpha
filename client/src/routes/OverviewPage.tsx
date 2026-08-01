@@ -1,12 +1,18 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { queryKeys } from '../lib/queryKeys';
 import { fetchMarketDataHealth } from '../features/markets/api';
 import { fetchRiskLimits } from '../features/risk/api';
+import { AssetCandlestickCard } from '../features/charts/AssetCandlestickCard';
+import { TRACKED_SYMBOLS, type TrackedSymbol } from '../features/charts/chartTypes';
 
 export function OverviewPage() {
+  const [mobileSymbol, setMobileSymbol] = useState<TrackedSymbol>('BTC');
+
   const health = useQuery({
     queryKey: queryKeys.marketData.health,
     queryFn: fetchMarketDataHealth,
@@ -23,12 +29,38 @@ export function OverviewPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <div>
         <h1 className="font-display text-3xl font-medium tracking-tight text-ink-primary">Overview</h1>
         <p className="mt-1 text-sm text-ink-secondary">
           What's happening in the market, and what risk you're carrying.
         </p>
+      </div>
+
+      {/* Mobile (<md): one chart at a time with a symbol switcher -- three
+          full candlestick charts stacked would be too compressed to read.
+          md and above: all three render at once (see the grid below). */}
+      <div className="md:hidden">
+        <Tabs value={mobileSymbol} onValueChange={(v) => setMobileSymbol(v as TrackedSymbol)}>
+          <TabsList aria-label="Select asset" className="mb-3 w-full justify-center">
+            {TRACKED_SYMBOLS.map((symbol) => (
+              <TabsTrigger key={symbol} value={symbol} className="flex-1">
+                {symbol}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <AssetCandlestickCard symbol={mobileSymbol} />
+      </div>
+
+      {/* md+: 2 columns, with the third card spanning full width to avoid
+          an awkward single-card orphan row; xl+: a legible 3-across row. */}
+      <div className="hidden md:grid md:grid-cols-2 md:gap-4 xl:grid-cols-3">
+        {TRACKED_SYMBOLS.map((symbol, index) => (
+          <div key={symbol} className={index === 2 ? 'md:col-span-2 xl:col-span-1' : undefined}>
+            <AssetCandlestickCard symbol={symbol} />
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

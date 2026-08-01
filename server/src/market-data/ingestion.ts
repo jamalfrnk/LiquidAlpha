@@ -4,7 +4,7 @@ import { addPricePoints, pruneOldPriceHistory } from '../price-history';
 import { fetchMarketData, type MarketData } from './coingecko';
 import { fetchMetaAndAssetCtxs, fetchCandleSnapshot } from '../hyperliquid-real';
 import { log } from '../observability/logger';
-import type { HyperliquidAssetSnapshot } from '../schemas/marketData';
+import { SUPPORTED_CANDLE_INTERVALS, type CandleInterval, type HyperliquidAssetSnapshot } from '../schemas/marketData';
 
 export type PublishMarketUpdateFn = (symbol: string, event: string, payload: unknown) => void;
 
@@ -192,13 +192,26 @@ export async function runIngestionCycle(publishMarketUpdate: PublishMarketUpdate
   }
 }
 
-/** How far back to backfill 1m candles each cycle -- comfortably covers one cycle's gap even under some jitter. */
-const CANDLE_BACKFILL_WINDOW_MS = 5 * 60_000;
+/**
+ * How far back to backfill each interval every cycle -- large enough that
+ * at least a handful of candles exist per interval (a 1h candle needs a
+ * multi-hour window to have *any* history at all, unlike 1m), small
+ * enough to stay a cheap, bounded request. Comfortably overlaps the
+ * previous cycle's coverage either way, since the upsert below makes
+ * re-fetching the same window idempotent.
+ */
+const CANDLE_BACKFILL_WINDOW_MS: Record<CandleInterval, number> = {
+  '1m': 5 * 60_000,
+  '5m': 30 * 60_000,
+  '15m': 90 * 60_000,
+  '1h': 6 * 60 * 60_000,
+};
 
 /**
- * Fetches recent 1m candles for each tracked symbol from Hyperliquid and
- * upserts them into `candles`, keyed by (symbol, interval, openTime) so a
- * re-fetched in-progress candle updates in place rather than duplicating.
+ * Fetches recent candles for each tracked symbol, at every interval this
+ * app's chart UI offers (CHART-001), from Hyperliquid and upserts them
+ * into `candles`, keyed by (symbol, interval, openTime) so a re-fetched
+ * in-progress candle updates in place rather than duplicating.
  * Deliberately independent of `runIngestionCycle` above (different cadence
  * -- candles don't need 10s freshness) and has no CoinGecko fallback:
  * CoinGecko doesn't provide OHLCV candles via this app's existing adapter,
@@ -207,33 +220,21 @@ const CANDLE_BACKFILL_WINDOW_MS = 5 * 60_000;
  */
 export async function runCandleBackfillCycle(): Promise<void> {
   const now = Date.now();
-  const startTime = now - CANDLE_BACKFILL_WINDOW_MS;
 
   for (const symbol of TRACKED_SYMBOLS) {
-    try {
-      const fetchedCandles = await fetchCandleSnapshot(symbol, '1m', startTime, now);
-      for (const candle of fetchedCandles) {
-        await db
-          .insert(candles)
-          .values({
-            venue: candle.venue,
-            symbol: candle.symbol,
-            marketType: candle.marketType,
-            interval: candle.interval,
-            openTime: candle.openTime,
-            closeTime: candle.closeTime,
-            sourceTimestamp: candle.sourceTimestamp,
-            receivedAt: candle.receivedAt,
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-            volume: candle.volume,
-            closed: candle.closed,
-          })
-          .onConflictDoUpdate({
-            target: [candles.symbol, candles.interval, candles.openTime],
-            set: {
+    for (const interval of SUPPORTED_CANDLE_INTERVALS) {
+      try {
+        const startTime = now - CANDLE_BACKFILL_WINDOW_MS[interval];
+        const fetchedCandles = await fetchCandleSnapshot(symbol, interval, startTime, now);
+        for (const candle of fetchedCandles) {
+          await db
+            .insert(candles)
+            .values({
+              venue: candle.venue,
+              symbol: candle.symbol,
+              marketType: candle.marketType,
+              interval: candle.interval,
+              openTime: candle.openTime,
               closeTime: candle.closeTime,
               sourceTimestamp: candle.sourceTimestamp,
               receivedAt: candle.receivedAt,
@@ -243,11 +244,29 @@ export async function runCandleBackfillCycle(): Promise<void> {
               close: candle.close,
               volume: candle.volume,
               closed: candle.closed,
-            },
-          });
+            })
+            .onConflictDoUpdate({
+              target: [candles.symbol, candles.interval, candles.openTime],
+              set: {
+                closeTime: candle.closeTime,
+                sourceTimestamp: candle.sourceTimestamp,
+                receivedAt: candle.receivedAt,
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+                volume: candle.volume,
+                closed: candle.closed,
+              },
+            });
+        }
+      } catch (err) {
+        log('error', 'candle_backfill_failed', {
+          symbol,
+          interval,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-    } catch (err) {
-      log('error', 'candle_backfill_failed', { symbol, error: err instanceof Error ? err.message : String(err) });
     }
   }
 }

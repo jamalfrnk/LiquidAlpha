@@ -57,7 +57,7 @@ Every metric shown must state its definition, source, date range, sample size, a
 
 ### 16. Observability — `feat/observability`
 Structured logging, request IDs, health checks distinguishing process/DB/market-data/WS/execution-provider health (assignment requirement) — none of this exists in either repo today. **Depends on: most of the above being in place to have something worth observing.**
-**Status: not started.** Tracked as [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) (`OBS-016`).
+**Status (2026-07-31): done** — see `docs/observability/strategy.md` and `docs/observability/signals.md` for what's instrumented, `docs/operations/runbook.md` for how to use it. Tracked as [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) (`OBS-016`).
 
 ### 17. Security tests — `test/security-suite`
 Nonce replay, expired-nonce rejection, cross-user resource access (regression test for Replit C-2 specifically), CSRF, oversized WS payloads, rate-limit enforcement. **Depends on: steps 5, 9, 11.**

@@ -204,6 +204,9 @@ export function OrderTicket() {
             {mutation.isError && (
               <p role="alert" className="mt-3 text-sm text-short">
                 {mutation.error instanceof ApiError ? mutation.error.message : 'Failed to submit order.'}
+                {mutation.error instanceof ApiError && mutation.error.requestId && (
+                  <span className="ml-1 text-ink-muted">(ref: {mutation.error.requestId})</span>
+                )}
               </p>
             )}
 

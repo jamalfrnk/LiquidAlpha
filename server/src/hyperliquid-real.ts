@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { env } from './config/env';
+import { incrementCounter } from './observability/metrics';
 
 /**
  * Hyperliquid RPC wrapper.
@@ -38,6 +39,18 @@ const FundingRateRes = z.object({
 });
 
 /**
+ * Thrown for an HTTP-status failure that's already been through the
+ * retry-or-give-up decision inside the `!resp.ok` branch below -- whether
+ * it was a non-retryable status (400/404, never eligible for retry) or a
+ * retryable one (429/5xx) whose attempts ran out. Marking it distinctly
+ * lets the outer `catch` recognize "this has already been decided, don't
+ * re-run the network-exception retry logic on it" instead of unconditionally
+ * retrying (and, worse, double-counting `provider_retry_exhausted`) for a
+ * status this function deliberately chose not to retry in the first place.
+ */
+class HttpStatusError extends Error {}
+
+/**
  * Posts JSON to the Hyperliquid API and returns the parsed JSON response.
  * Implements retries with exponential backoff and a configurable timeout.
  *
@@ -64,23 +77,35 @@ async function postJSON<T>(path: string, body: unknown, timeoutMs = 8000, retrie
       clearTimeout(timer);
       if (!resp.ok) {
         // Retry on rate limit or server error
-        if ((resp.status >= 500 || resp.status === 429) && attempt < retries) {
+        const retryable = resp.status >= 500 || resp.status === 429;
+        if (retryable && attempt < retries) {
           attempt++;
           const delay = Math.min(300 * Math.pow(2, attempt), 30000);
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
         const text = await resp.text();
-        throw new Error(`HTTP ${resp.status} ${resp.statusText}: ${text.slice(0, 200)}`);
+        // Only count this as an *exhausted retry* when the status was
+        // actually retryable and we ran out of attempts -- a plain 400/404
+        // never gets retried in the first place and isn't "exhaustion".
+        if (retryable) incrementCounter('provider_retry_exhausted');
+        throw new HttpStatusError(`HTTP ${resp.status} ${resp.statusText}: ${text.slice(0, 200)}`);
       }
       return (await resp.json()) as T;
     } catch (err) {
+      // Already handled above (retried until exhausted, or was never
+      // retryable) -- re-throwing here must not re-enter the
+      // network-exception retry loop below, or a plain 404 would get
+      // silently retried again through this branch.
+      if (err instanceof HttpStatusError) throw err;
+
       if (attempt < retries) {
         attempt++;
         const delay = Math.min(300 * Math.pow(2, attempt), 30000);
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
+      incrementCounter('provider_retry_exhausted');
       throw err;
     }
   }

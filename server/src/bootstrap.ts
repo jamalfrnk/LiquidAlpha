@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'express';
+import { log } from './observability/logger';
 
 /**
  * Install global process error handlers. These handlers log unhandled
@@ -7,11 +8,11 @@ import type { RequestHandler } from 'express';
  * resources. Call this function once at server start.
  */
 export function installProcessErrorHandlers(): void {
-  process.on('unhandledRejection', (reason, promise) => {
-    console.error('[unhandledRejection]', { reason, promise });
+  process.on('unhandledRejection', (reason) => {
+    log('error', 'unhandled_rejection', { reason: reason instanceof Error ? reason.message : String(reason) });
   });
   process.on('uncaughtException', (err) => {
-    console.error('[uncaughtException]', err);
+    log('error', 'uncaught_exception', { error: err.message, stack: err.stack });
   });
 }
 

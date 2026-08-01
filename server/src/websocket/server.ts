@@ -20,6 +20,16 @@ interface ClientState {
 export interface WsServerMetrics {
   connections: number;
   totalSubscriptions: number;
+  /**
+   * Monotonic count of every connection accepted since the process started
+   * (never decremented on close) -- there's no pre-auth client identity to
+   * key a true per-client "reconnect" count off, so this is the honest
+   * server-side reconnection signal: watched alongside `connections`, a
+   * `totalConnectionsAccepted` that keeps climbing while `connections`
+   * stays flat around the expected number of open dashboards is exactly
+   * what sustained reconnect churn looks like.
+   */
+  totalConnectionsAccepted: number;
 }
 
 export interface MarketDataWsServer {
@@ -67,6 +77,7 @@ export function createMarketDataWsServer(port: number): MarketDataWsServer {
   const registry = new SubscriptionRegistry<WebSocket>();
   const state = new Map<WebSocket, ClientState>();
   let connectionCount = 0;
+  let totalConnectionsAccepted = 0;
 
   wss.on('connection', (ws, request: IncomingMessage) => {
     if (connectionCount >= MAX_CONNECTIONS) {
@@ -74,6 +85,7 @@ export function createMarketDataWsServer(port: number): MarketDataWsServer {
       return;
     }
     connectionCount += 1;
+    totalConnectionsAccepted += 1;
     const clientState: ClientState = { alive: true };
     state.set(ws, clientState);
 
@@ -157,7 +169,11 @@ export function createMarketDataWsServer(port: number): MarketDataWsServer {
       registry.publish([`user:${userId}`], (seq) => ({ event, channel: 'user', seq, payload }));
     },
     getMetrics() {
-      return { connections: connectionCount, totalSubscriptions: registry.totalSubscriptions };
+      return {
+        connections: connectionCount,
+        totalSubscriptions: registry.totalSubscriptions,
+        totalConnectionsAccepted,
+      };
     },
     address() {
       const addr = wss.address();

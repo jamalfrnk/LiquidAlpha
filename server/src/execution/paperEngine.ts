@@ -12,6 +12,7 @@ import { calculateUnrealizedPnl, weightedAverageEntryPrice } from './pnl';
 import { isOrderTerminal, type OrderStatus } from './stateMachine';
 import { getMarketSnapshot, countOpenPositions, getOpenPosition } from './queries';
 import { NotFoundError, ForbiddenError, ExecutionModeNotSupportedError, isUniqueViolation } from './errors';
+import { incrementCounter } from '../observability/metrics';
 import type { SubmitOrderRequest } from '../schemas/execution';
 
 /** Price deviation and staleness bounds applied to every order, on top of the caller's own risk_limits. */
@@ -38,6 +39,7 @@ async function setOrderStatus(orderId: string, status: OrderStatus, rejectionRea
 }
 
 async function rejectOrder(orderId: string, reason: string): Promise<OrderResult> {
+  incrementCounter('order_rejected');
   const order = await setOrderStatus(orderId, 'REJECTED', reason);
   return { order, fills: [] };
 }

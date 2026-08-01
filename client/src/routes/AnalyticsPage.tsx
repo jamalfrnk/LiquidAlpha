@@ -41,9 +41,7 @@ export function AnalyticsPage() {
           {performance.isLoading && <p className="text-sm text-ink-muted">Loading your performance…</p>}
           {performance.isError && <p className="text-sm text-short">Could not load your performance.</p>}
 
-          {performance.data?.tier === 'insufficient' && (
-            <InsufficientData sampleSize={performance.data.sampleSize} />
-          )}
+          {performance.data?.tier === 'insufficient' && <InsufficientData sampleSize={performance.data.sampleSize} />}
           {performance.data?.tier === 'preliminary' && (
             <PreliminaryView sampleSize={performance.data.sampleSize} metrics={performance.data.metrics} />
           )}
@@ -110,12 +108,19 @@ function FullView({
   sampleSize: number;
   windowStart: string;
   windowEnd: string;
-  metrics: { winRatePercent: number; totalPnl: number; averagePnl: number; riskAdjustedReturnRatio: number | null; maxDrawdown: number };
+  metrics: {
+    winRatePercent: number;
+    totalPnl: number;
+    averagePnl: number;
+    riskAdjustedReturnRatio: number | null;
+    maxDrawdown: number;
+  };
 }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-ink-muted">
-        {sampleSize} closed trades, {new Date(windowStart).toLocaleDateString()} – {new Date(windowEnd).toLocaleDateString()}
+        {sampleSize} closed trades, {new Date(windowStart).toLocaleDateString()} –{' '}
+        {new Date(windowEnd).toLocaleDateString()}
       </p>
       <MetricGrid
         rows={[
@@ -138,11 +143,7 @@ function FullView({
   );
 }
 
-function MetricGrid({
-  rows,
-}: {
-  rows: { label: string; value: string; sign?: number; hint?: string }[];
-}) {
+function MetricGrid({ rows }: { rows: { label: string; value: string; sign?: number; hint?: string }[] }) {
   return (
     <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {rows.map((row) => (

@@ -29,12 +29,18 @@ export function DialogContent({ children, className }: { children: ReactNode; cl
 
 export function DialogTitle({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <DialogPrimitive.Title className={cn('font-display text-xl font-medium tracking-tight text-ink-primary', className)}>
+    <DialogPrimitive.Title
+      className={cn('font-display text-xl font-medium tracking-tight text-ink-primary', className)}
+    >
       {children}
     </DialogPrimitive.Title>
   );
 }
 
 export function DialogDescription({ children, className }: { children: ReactNode; className?: string }) {
-  return <DialogPrimitive.Description className={cn('mt-1 text-sm text-ink-secondary', className)}>{children}</DialogPrimitive.Description>;
+  return (
+    <DialogPrimitive.Description className={cn('mt-1 text-sm text-ink-secondary', className)}>
+      {children}
+    </DialogPrimitive.Description>
+  );
 }

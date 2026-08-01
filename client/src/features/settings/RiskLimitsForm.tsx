@@ -61,18 +61,21 @@ export function RiskLimitsForm() {
 
   // Initialize the editable form from the fetched values exactly once --
   // a later background refetch (staleTime: 60s elsewhere) must not clobber
-  // an in-progress edit the user hasn't saved yet.
-  useEffect(() => {
-    if (data && form === null) {
-      setForm({
-        maxPositionSize: data.maxPositionSize,
-        maxLeverage: data.maxLeverage,
-        maxOpenPositions: String(data.maxOpenPositions),
-        maxDailyLossPercent: data.maxDailyLossPercent,
-        killSwitchEnabled: data.killSwitchEnabled,
-      });
-    }
-  }, [data, form]);
+  // an in-progress edit the user hasn't saved yet. Set during render rather
+  // than in an effect: the `form === null` guard only holds for the render
+  // where `data` first arrives, so this fires exactly once, not on every
+  // render -- React's documented pattern for one-time initialization from
+  // async data, and it avoids the extra commit-then-effect-then-second-commit
+  // round trip a useEffect version of this would need.
+  if (data && form === null) {
+    setForm({
+      maxPositionSize: data.maxPositionSize,
+      maxLeverage: data.maxLeverage,
+      maxOpenPositions: String(data.maxOpenPositions),
+      maxDailyLossPercent: data.maxDailyLossPercent,
+      killSwitchEnabled: data.killSwitchEnabled,
+    });
+  }
 
   useEffect(() => {
     if (savedAt === null) return;

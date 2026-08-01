@@ -38,10 +38,14 @@ Manual merge
 ### 1. Local implementation and tests
 
 Work on a feature branch (`git checkout -b feature/<short-description>`). Write/adjust
-code and tests. Run what's available locally: `npm run build` and `npm test`
-(`vitest run`, real test suite) in `server/`; `npm run typecheck` and `npm run build` in
-`client/` (no test suite there yet). Neither package has a `lint` script configured yet
--- once one exists, run it too.
+code and tests. Run what's available locally: `npm run build`, `npm test` (`vitest run`,
+real test suite) in `server/`; `npm run typecheck`, `npm run build`, `npm test` (`vitest
+run` + React Testing Library, real component/hook tests), `npm run lint` (ESLint), and
+`npm run format:check` (Prettier) in `client/` (TEST-CLIENT-001). Client also has
+`npm run test:e2e` (Playwright, Chromium-only, smoke-level: guest sign-in screen loads
+cleanly and passes an automated accessibility scan) -- not wired into CI yet (would need
+a browser-binary install step; deferred rather than added speculatively), so run it
+manually before a PR that touches client UI.
 
 ### 2. LiquidAlpha Quality Gate Agent
 
@@ -57,11 +61,13 @@ confirmed in-scope fixes itself, then re-run the gate.
 ### 3. GitHub CI
 
 Push the branch. `.github/workflows/quality-gate.yml` runs the **deterministic** checks —
-lockfile-enforced install, lint (once configured), type check/build, server tests (real
-`vitest` suite; client has none configured yet), dependency audit, migration sanity
-check, and a secret scan — with no dependency on Claude/API access. This is the pipeline
-that actually gates merges via
-branch protection / required checks.
+lockfile-enforced install, lint (both packages now have a `lint` script; the workflow's
+existing "if configured" check picks it up with no workflow edit needed), type
+check/build, tests (real `vitest` suites in both `server/` and, as of TEST-CLIENT-001,
+`client/`), dependency audit, migration sanity check, and a secret scan — with no
+dependency on Claude/API access. This is the pipeline that actually gates merges via
+branch protection / required checks. Playwright e2e is deliberately not part of this
+workflow (see above) — it's a manual pre-PR check for now.
 
 ### 4. Draft pull request
 

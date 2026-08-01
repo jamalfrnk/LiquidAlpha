@@ -15,7 +15,15 @@ import type { Side, OrderType } from './types';
 
 const ASSETS = ['BTC', 'ETH', 'SOL'] as const;
 
-function SegmentedToggle<T extends string>({ options, value, onChange }: { options: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+function SegmentedToggle<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
   return (
     <div className="inline-flex w-full rounded-lg border border-border-subtle bg-bg-elevated p-1">
       {options.map((opt) => (
@@ -109,7 +117,11 @@ export function OrderTicket() {
               <div>
                 <Label htmlFor="asset">Asset</Label>
                 <div className="mt-1.5">
-                  <SegmentedToggle options={ASSETS.map((a) => ({ value: a, label: a }))} value={asset} onChange={setAsset} />
+                  <SegmentedToggle
+                    options={ASSETS.map((a) => ({ value: a, label: a }))}
+                    value={asset}
+                    onChange={setAsset}
+                  />
                 </div>
               </div>
 
@@ -144,23 +156,52 @@ export function OrderTicket() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="quantity">Quantity</Label>
-                  <Input id="quantity" className="mt-1.5" type="number" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0.00" />
+                  <Input
+                    id="quantity"
+                    className="mt-1.5"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="leverage">Leverage</Label>
-                  <Input id="leverage" className="mt-1.5" type="number" min="1" step="1" value={leverage} onChange={(e) => setLeverage(e.target.value)} placeholder="1" />
+                  <Input
+                    id="leverage"
+                    className="mt-1.5"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={leverage}
+                    onChange={(e) => setLeverage(e.target.value)}
+                    placeholder="1"
+                  />
                 </div>
               </div>
 
               {orderType === 'LIMIT' && (
                 <div>
                   <Label htmlFor="limitPrice">Limit Price</Label>
-                  <Input id="limitPrice" className="mt-1.5" type="number" min="0" step="any" value={limitPrice} onChange={(e) => setLimitPrice(e.target.value)} placeholder="0.00" />
+                  <Input
+                    id="limitPrice"
+                    className="mt-1.5"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={limitPrice}
+                    onChange={(e) => setLimitPrice(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
               )}
 
               {currentPrice !== undefined && (
-                <p className="text-xs text-ink-muted">Current {asset} price: ${formatPrice(currentPrice)}</p>
+                <p className="text-xs text-ink-muted">
+                  Current {asset} price: ${formatPrice(currentPrice)}
+                </p>
               )}
 
               <Button disabled={!isValid} onClick={() => setConfirming(true)}>
@@ -182,14 +223,23 @@ export function OrderTicket() {
               <Row
                 label="Direction"
                 value={
-                  <span className={cn('flex items-center gap-1 font-medium', side === 'LONG' ? 'text-long' : 'text-short')}>
-                    {side === 'LONG' ? <ArrowUpRight className="h-3.5 w-3.5" aria-hidden /> : <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />}
+                  <span
+                    className={cn('flex items-center gap-1 font-medium', side === 'LONG' ? 'text-long' : 'text-short')}
+                  >
+                    {side === 'LONG' ? (
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                    ) : (
+                      <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />
+                    )}
                     {side}
                   </span>
                 }
               />
               <Row label="Order Type" value={orderType === 'MARKET' ? 'Market' : 'Limit'} />
-              <Row label={orderType === 'MARKET' ? 'Est. Fill Price' : 'Limit Price'} value={effectivePrice ? `$${formatPrice(effectivePrice)}` : '—'} />
+              <Row
+                label={orderType === 'MARKET' ? 'Est. Fill Price' : 'Limit Price'}
+                value={effectivePrice ? `$${formatPrice(effectivePrice)}` : '—'}
+              />
               <Row label="Quantity" value={parsedQuantity} />
               <Row label="Leverage" value={`${leverage}x`} />
               <Row label="Notional Exposure" value={notional !== undefined ? `$${formatPrice(notional)}` : '—'} />
@@ -211,7 +261,12 @@ export function OrderTicket() {
             )}
 
             <div className="mt-4 flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={() => setConfirming(false)} disabled={mutation.isPending}>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setConfirming(false)}
+                disabled={mutation.isPending}
+              >
                 Back
               </Button>
               <Button
@@ -239,8 +294,17 @@ export function OrderTicket() {
           <>
             <DialogTitle>Order {mutation.data.order.status === 'REJECTED' ? 'Rejected' : 'Submitted'}</DialogTitle>
             <div className="mt-4 flex flex-col gap-2 rounded-lg bg-bg-floating/60 p-4 text-sm">
-              <Row label="Status" value={<Badge variant={mutation.data.order.status === 'REJECTED' ? 'short' : 'long'}>{mutation.data.order.status}</Badge>} />
-              {mutation.data.order.rejectionReason && <Row label="Reason" value={mutation.data.order.rejectionReason} />}
+              <Row
+                label="Status"
+                value={
+                  <Badge variant={mutation.data.order.status === 'REJECTED' ? 'short' : 'long'}>
+                    {mutation.data.order.status}
+                  </Badge>
+                }
+              />
+              {mutation.data.order.rejectionReason && (
+                <Row label="Reason" value={mutation.data.order.rejectionReason} />
+              )}
               {mutation.data.fills.length > 0 && (
                 <Row label="Fill Price" value={`$${formatPrice(mutation.data.fills[0].price)}`} />
               )}

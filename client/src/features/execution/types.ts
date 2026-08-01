@@ -68,4 +68,9 @@ export interface SubmitOrderInput {
 }
 
 /** Only cancellable in these statuses -- everything else is terminal or already in flight toward terminal. */
-export const CANCELLABLE_STATUSES: readonly OrderStatus[] = ['PENDING_CONFIRMATION', 'SUBMITTED', 'ACKNOWLEDGED', 'PARTIALLY_FILLED'];
+export const CANCELLABLE_STATUSES: readonly OrderStatus[] = [
+  'PENDING_CONFIRMATION',
+  'SUBMITTED',
+  'ACKNOWLEDGED',
+  'PARTIALLY_FILLED',
+];

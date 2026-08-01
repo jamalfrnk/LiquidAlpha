@@ -44,7 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user } = await verifySignature(address, 'evm', signature);
       queryClient.setQueryData(queryKeys.auth.me, { user });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to connect wallet';
+      const message =
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to connect wallet';
       setConnectError(message);
     } finally {
       setIsConnecting(false);

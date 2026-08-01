@@ -21,7 +21,8 @@ export function SignalCard({ signal, market }: { signal: Signal; market: MarketS
   const currentPrice = market ? parseFloat(market.price) : undefined;
   const deviationPercent = currentPrice !== undefined ? ((currentPrice - entryPrice) / entryPrice) * 100 : undefined;
   // "Favorable" means the market has moved in the direction the signal called, since it fired.
-  const favorable = deviationPercent !== undefined ? (isLong ? deviationPercent >= 0 : deviationPercent <= 0) : undefined;
+  const favorable =
+    deviationPercent !== undefined ? (isLong ? deviationPercent >= 0 : deviationPercent <= 0) : undefined;
 
   return (
     <Card className="shadow-elevated">
@@ -29,7 +30,11 @@ export function SignalCard({ signal, market }: { signal: Signal; market: MarketS
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <Badge variant={isLong ? 'long' : 'short'} className="gap-1">
-              {isLong ? <ArrowUpRight className="h-3.5 w-3.5" aria-hidden /> : <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />}
+              {isLong ? (
+                <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />
+              )}
               {signal.signalType}
             </Badge>
             <span className="font-display text-xl font-medium tracking-tight text-ink-primary">{signal.asset}</span>

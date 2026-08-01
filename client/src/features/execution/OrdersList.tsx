@@ -55,7 +55,11 @@ export function OrdersList() {
             <CardContent className="flex items-center justify-between gap-4 pt-5">
               <div className="flex items-center gap-3">
                 <Badge variant={isLong ? 'long' : 'short'} className="gap-1">
-                  {isLong ? <ArrowUpRight className="h-3.5 w-3.5" aria-hidden /> : <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />}
+                  {isLong ? (
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />
+                  )}
                   {order.side}
                 </Badge>
                 <span className="font-display text-lg font-medium tracking-tight text-ink-primary">{order.asset}</span>
@@ -88,7 +92,12 @@ export function OrdersList() {
               </div>
 
               {cancellable ? (
-                <Button variant="secondary" size="sm" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate(order.id)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={cancelMutation.isPending}
+                  onClick={() => cancelMutation.mutate(order.id)}
+                >
                   Cancel
                 </Button>
               ) : (
@@ -104,10 +113,20 @@ export function OrdersList() {
       })}
 
       <div className="flex items-center justify-between pt-2">
-        <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+        >
           Newer
         </Button>
-        <Button variant="secondary" size="sm" disabled={orders.data.length < PAGE_SIZE} onClick={() => setOffset(offset + PAGE_SIZE)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={orders.data.length < PAGE_SIZE}
+          onClick={() => setOffset(offset + PAGE_SIZE)}
+        >
           Older
         </Button>
       </div>

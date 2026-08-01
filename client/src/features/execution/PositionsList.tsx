@@ -42,7 +42,12 @@ export function PositionsList() {
         const currentPrice = market ? parseFloat(market.price) : undefined;
         const unrealizedPnl =
           currentPrice !== undefined
-            ? calculateUnrealizedPnl(position.side, parseFloat(position.entryPrice), currentPrice, parseFloat(position.quantity))
+            ? calculateUnrealizedPnl(
+                position.side,
+                parseFloat(position.entryPrice),
+                currentPrice,
+                parseFloat(position.quantity),
+              )
             : undefined;
         const isLong = position.side === 'LONG';
 
@@ -51,10 +56,16 @@ export function PositionsList() {
             <CardContent className="flex items-center justify-between gap-4 pt-5">
               <div className="flex items-center gap-3">
                 <Badge variant={isLong ? 'long' : 'short'} className="gap-1">
-                  {isLong ? <ArrowUpRight className="h-3.5 w-3.5" aria-hidden /> : <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />}
+                  {isLong ? (
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <ArrowDownRight className="h-3.5 w-3.5" aria-hidden />
+                  )}
                   {position.side}
                 </Badge>
-                <span className="font-display text-lg font-medium tracking-tight text-ink-primary">{position.asset}</span>
+                <span className="font-display text-lg font-medium tracking-tight text-ink-primary">
+                  {position.asset}
+                </span>
               </div>
 
               <div className="flex flex-1 items-center justify-around text-sm">
@@ -68,12 +79,18 @@ export function PositionsList() {
                 </div>
                 <div>
                   <div className="text-xs text-ink-muted">Current</div>
-                  <div className="tabular-nums text-ink-primary">{currentPrice !== undefined ? `$${formatPrice(currentPrice)}` : '—'}</div>
+                  <div className="tabular-nums text-ink-primary">
+                    {currentPrice !== undefined ? `$${formatPrice(currentPrice)}` : '—'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs text-ink-muted">Unrealized PnL</div>
-                  <div className={`tabular-nums font-medium ${unrealizedPnl !== undefined ? (unrealizedPnl >= 0 ? 'text-long' : 'text-short') : 'text-ink-primary'}`}>
-                    {unrealizedPnl !== undefined ? `${unrealizedPnl >= 0 ? '+' : ''}$${formatPrice(Math.abs(unrealizedPnl))}` : '—'}
+                  <div
+                    className={`tabular-nums font-medium ${unrealizedPnl !== undefined ? (unrealizedPnl >= 0 ? 'text-long' : 'text-short') : 'text-ink-primary'}`}
+                  >
+                    {unrealizedPnl !== undefined
+                      ? `${unrealizedPnl >= 0 ? '+' : ''}$${formatPrice(Math.abs(unrealizedPnl))}`
+                      : '—'}
                   </div>
                 </div>
               </div>
@@ -92,10 +109,20 @@ export function PositionsList() {
       })}
 
       <div className="flex items-center justify-between pt-2">
-        <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={offset === 0}
+          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+        >
           Newer
         </Button>
-        <Button variant="secondary" size="sm" disabled={positions.data.length < PAGE_SIZE} onClick={() => setOffset(offset + PAGE_SIZE)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={positions.data.length < PAGE_SIZE}
+          onClick={() => setOffset(offset + PAGE_SIZE)}
+        >
           Older
         </Button>
       </div>

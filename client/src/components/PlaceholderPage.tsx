@@ -7,7 +7,15 @@ import { Card, CardContent } from './ui/card';
  * fabricated one. Per the audit's own guidance: never show an empty or
  * fake view as if it were the real thing.
  */
-export function PlaceholderPage({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
+export function PlaceholderPage({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <Card className="max-w-md text-center">

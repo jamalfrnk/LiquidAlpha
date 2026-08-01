@@ -100,8 +100,18 @@ security test suite, and analytics integrity — were closed by PR #26 (`OBS-016
 (`SEC-017`), and `feat/analytics-integrity` (`DATA-015`), each landed after this doc was
 first written. Current gaps, re-verified as of this update:
 
-- No client test framework — CI's client job explicitly skips a test step today.
-- No lint configuration in either package — CI explicitly warns and skips.
+- ~~No client test framework~~ — resolved by `TEST-CLIENT-001` (issue #31): `client/`
+  now has Vitest + React Testing Library (`npm test`), Playwright/Chromium for a
+  guest-screen smoke test + automated accessibility check (`npm run test:e2e`, not
+  wired into CI yet -- deferred rather than adding a browser-binary install step
+  speculatively), ESLint flat config (`npm run lint`), and Prettier (`npm run
+  format`/`format:check`, applied once across existing `src/` as a mechanical,
+  whitespace-only pass). CI's existing "if configured" checks pick up `lint`/`test`
+  automatically, no workflow edit needed. Found and fixed one real defect in the
+  process: `ink-muted` (`#726F8C`) was 3.81:1 against `bg-elevated`, below WCAG AA's
+  4.5:1 — now `#807D98` (same hue, +5% lightness), 4.63:1.
+- No lint configuration in the `server/` package — CI explicitly warns and skips
+  (client now has one, see above).
 - `server/src/performance.ts` is dead code, kept in place rather than deleted (nothing
   imports it; superseded by `server/src/analytics/`, which reads real closed trades from
   `positions` rather than the disconnected `performance` table this file used).

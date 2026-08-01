@@ -13,6 +13,11 @@ export function verifySignature(address: string, chain: Chain, signature: string
   return apiRequest('POST', '/api/auth/verify', { address, chain, signature });
 }
 
+/** Creates a fresh guest-practice session -- no wallet, no signature, no request body. */
+export function createGuestSession(): Promise<{ user: AuthUser }> {
+  return apiRequest('POST', '/api/auth/guest');
+}
+
 export function logout(): Promise<{ success: boolean }> {
   return apiRequest('POST', '/api/auth/logout');
 }

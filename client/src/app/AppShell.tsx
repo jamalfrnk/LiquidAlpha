@@ -86,8 +86,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {user && (
-              <Badge variant="brand" className="tabular-nums">
-                {truncateAddress(user.address)}
+              <Badge variant={user.kind === 'guest' ? 'neutral' : 'brand'} className="tabular-nums">
+                {user.kind === 'guest' ? 'Guest' : truncateAddress(user.address)}
               </Badge>
             )}
             <Button variant="ghost" size="sm" onClick={() => void logout()} aria-label="Log out">

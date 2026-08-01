@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './AuthProvider';
 import type { EIP1193Provider } from './eip6963';
@@ -10,17 +11,20 @@ vi.mock('./api', () => ({
   fetchMe: vi.fn(),
   requestNonce: vi.fn(),
   verifySignature: vi.fn(),
+  createGuestSession: vi.fn(),
   logout: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-import { fetchMe } from './api';
+import { fetchMe, createGuestSession } from './api';
 
 function TestConsumer() {
-  const { user, accountChangedNotice } = useAuth();
+  const { user, accountChangedNotice, loginAsGuest } = useAuth();
   return (
     <div>
       <div data-testid="user">{user ? user.address : 'none'}</div>
+      <div data-testid="kind">{user ? user.kind : 'none'}</div>
       <div data-testid="notice">{accountChangedNotice ?? 'none'}</div>
+      <button onClick={() => void loginAsGuest()}>Continue as Guest</button>
     </div>
   );
 }
@@ -59,7 +63,7 @@ describe('AuthProvider: accountsChanged lifecycle (WALLET-001)', () => {
   it('clears the session and shows a re-sign notice when the wallet reports a different active account', async () => {
     window.localStorage.setItem(SELECTED_WALLET_RDNS_KEY, 'io.metamask');
     vi.mocked(fetchMe).mockResolvedValue({
-      user: { id: '1', address: '0xORIGINAL', chain: 'evm', builderCode: 'x' },
+      user: { id: '1', address: '0xORIGINAL', chain: 'evm', builderCode: 'x', kind: 'wallet' },
     });
 
     const { provider, handlers } = fakeMetaMaskProvider();
@@ -92,7 +96,7 @@ describe('AuthProvider: accountsChanged lifecycle (WALLET-001)', () => {
   it('does not clear the session or show a notice when accountsChanged reports the same address (case-insensitive)', async () => {
     window.localStorage.setItem(SELECTED_WALLET_RDNS_KEY, 'io.metamask');
     vi.mocked(fetchMe).mockResolvedValue({
-      user: { id: '1', address: '0xSAME', chain: 'evm', builderCode: 'x' },
+      user: { id: '1', address: '0xSAME', chain: 'evm', builderCode: 'x', kind: 'wallet' },
     });
 
     const { provider, handlers } = fakeMetaMaskProvider();
@@ -116,5 +120,63 @@ describe('AuthProvider: accountsChanged lifecycle (WALLET-001)', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByTestId('user').textContent).toBe('0xSAME');
     expect(screen.getByTestId('notice').textContent).toBe('none');
+  });
+});
+
+describe('AuthProvider: guest sessions (AUTH-GUEST-001)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('starts a guest session and reflects kind "guest" in the auth context', async () => {
+    vi.mocked(fetchMe).mockRejectedValue(new Error('not logged in'));
+    vi.mocked(createGuestSession).mockResolvedValue({
+      user: { id: 'g1', address: 'guest:abc', chain: 'evm', builderCode: 'x', kind: 'guest' },
+    });
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('none'));
+    await user.click(screen.getByRole('button', { name: 'Continue as Guest' }));
+
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('guest:abc'));
+    expect(screen.getByTestId('kind').textContent).toBe('guest');
+    expect(createGuestSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears any previously selected wallet rdns when starting a guest session', async () => {
+    window.localStorage.setItem(SELECTED_WALLET_RDNS_KEY, 'io.metamask');
+    vi.mocked(fetchMe).mockRejectedValue(new Error('not logged in'));
+    vi.mocked(createGuestSession).mockResolvedValue({
+      user: { id: 'g1', address: 'guest:abc', chain: 'evm', builderCode: 'x', kind: 'guest' },
+    });
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('none'));
+    await user.click(screen.getByRole('button', { name: 'Continue as Guest' }));
+
+    await waitFor(() => expect(screen.getByTestId('kind').textContent).toBe('guest'));
+    expect(window.localStorage.getItem(SELECTED_WALLET_RDNS_KEY)).toBeNull();
   });
 });

@@ -30,3 +30,22 @@ export async function findOrCreateUser(address: string, chain: Chain) {
     .returning();
   return created;
 }
+
+/**
+ * Creates a brand-new guest-practice identity -- no wallet, no signature,
+ * no existing-user lookup (unlike findOrCreateUser above, every call
+ * creates a fresh row; the *session* is what persists a guest's identity
+ * across requests/refreshes, the same as it does for a wallet user).
+ * `address`/`chain` get synthetic-but-unique values rather than nullable
+ * columns -- see the `users.kind` doc comment in db/schema.ts for why that
+ * keeps every downstream consumer (risk engine, execution, analytics)
+ * working unmodified.
+ */
+export async function createGuestUser() {
+  const address = `guest:${crypto.randomUUID()}`;
+  const [created] = await db
+    .insert(users)
+    .values({ address, chain: 'guest', builderCode: generateBuilderCode(), kind: 'guest' })
+    .returning();
+  return created;
+}

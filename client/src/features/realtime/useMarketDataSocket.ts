@@ -1,10 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import type { MarketSnapshot } from '../markets/types';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
 const RECONNECT_DELAY_MS = 3000;
+
+/**
+ * Only two states are modeled: this hook always retries on close (see the
+ * `close` listener below), with no backoff cap or give-up condition, so
+ * there is no code path that would ever produce a genuine "gave up,
+ * disconnected for good" state today. Modeling a third state nothing can
+ * ever reach would be a fabricated signal, not a useful one -- if
+ * reconnection backoff/exhaustion is added later, extend this type then.
+ */
+export type ConnectionStatus = 'connected' | 'reconnecting';
 
 interface MarketUpdatePayload {
   symbol: string;
@@ -35,9 +45,10 @@ interface ServerEnvelope {
  * Mount exactly once (in AppShell) -- every page reads the same
  * WS-updated query cache rather than each page opening its own socket.
  */
-export function useMarketDataSocket(): void {
+export function useMarketDataSocket(): ConnectionStatus {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('reconnecting');
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +59,7 @@ export function useMarketDataSocket(): void {
       wsRef.current = ws;
 
       ws.addEventListener('open', () => {
+        setStatus('connected');
         ws.send(JSON.stringify({ type: 'subscribe', channel: 'markets' }));
         ws.send(JSON.stringify({ type: 'subscribe', channel: 'signals' }));
       });
@@ -91,6 +103,7 @@ export function useMarketDataSocket(): void {
 
       ws.addEventListener('close', () => {
         if (!cancelled) {
+          setStatus('reconnecting');
           reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
         }
       });
@@ -108,4 +121,6 @@ export function useMarketDataSocket(): void {
       wsRef.current?.close();
     };
   }, [queryClient]);
+
+  return status;
 }

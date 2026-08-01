@@ -123,8 +123,31 @@ describe('MarketDataWsServer (real socket, no DB)', () => {
     const metrics = server.getMetrics();
     expect(metrics.connections).toBe(1);
     expect(metrics.totalSubscriptions).toBe(2);
+    expect(metrics.totalConnectionsAccepted).toBe(1);
 
     client.close();
+  });
+
+  it('increments totalConnectionsAccepted on a manual disconnect/reconnect without double-counting live connections', async () => {
+    server = createMarketDataWsServer(0);
+
+    const first = await connect(server.address());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(server.getMetrics()).toMatchObject({ connections: 1, totalConnectionsAccepted: 1 });
+
+    first.close();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(server.getMetrics()).toMatchObject({ connections: 0, totalConnectionsAccepted: 1 });
+
+    const second = await connect(server.address());
+    await new Promise((r) => setTimeout(r, 50));
+    // The live gauge is back to 1 (one open connection), but the lifetime
+    // counter reflects that two connections have been accepted in total --
+    // exactly the distinction that makes it a reconnection signal rather
+    // than a duplicate of `connections`.
+    expect(server.getMetrics()).toMatchObject({ connections: 1, totalConnectionsAccepted: 2 });
+
+    second.close();
   });
 
   it('cleans up subscriptions when a client disconnects', async () => {

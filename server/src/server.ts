@@ -19,6 +19,11 @@ import { executionRouter } from './execution/router';
 import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
 import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
+import { requestContext, RESPONSE_REQUEST_ID_HEADER } from './observability/requestContext';
+import { httpLogger } from './observability/httpLogger';
+import { log } from './observability/logger';
+import { metricsSnapshot } from './observability/metrics';
+import { checkReadiness } from './observability/readiness';
 
 /**
  * Main server module for LiquidAlpha.
@@ -43,7 +48,16 @@ const corsOrigins = env.CORS_ORIGIN
   ? env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
   : ['http://localhost:3000', 'http://localhost:5173'];
 const app = express();
-app.use(cors({ origin: corsOrigins, credentials: true }));
+// `exposedHeaders` is required for browser JS to read a custom response
+// header cross-origin at all -- without it, `X-Request-Id` is set on the
+// wire but invisible to `fetch()`'s `res.headers.get(...)` in the client,
+// silently defeating the whole point of sending it back.
+app.use(cors({ origin: corsOrigins, credentials: true, exposedHeaders: [RESPONSE_REQUEST_ID_HEADER] }));
+// Assign/propagate a request ID and emit one structured log line per
+// request before anything else runs, so every request -- including ones
+// that get rate-limited or fail body parsing -- is covered.
+app.use(requestContext);
+app.use(httpLogger);
 app.use(express.json());
 app.use(cookieParser());
 app.use('/api', apiLimiter);
@@ -59,9 +73,9 @@ installProcessErrorHandlers();
 // Start the database connection before handling any requests.  If the
 // connection fails the promise will reject and the server will not start.
 connectDb().then(() => {
-  console.log('Database connected');
+  log('info', 'database_connected');
 }).catch((err) => {
-  console.error('Failed to connect to database', err);
+  log('error', 'database_connection_failed', { error: err instanceof Error ? err.message : String(err) });
   process.exit(1);
 });
 
@@ -87,7 +101,7 @@ async function updateSignals() {
     await generateSignals();
     wsServer.publishSignal('newSignal', { message: 'Signals updated' });
   } catch (err) {
-    console.error('Signal generation failed', err);
+    log('error', 'signal_generation_failed', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -95,7 +109,9 @@ async function updateSignals() {
 setInterval(() => runIngestionCycle((symbol, event, payload) => wsServer.publishMarketUpdate(symbol, event, payload)), 10_000);
 setInterval(updateSignals, 30_000);
 setInterval(() => {
-  sweepLimitOrders().catch((err) => console.error('Limit-order sweep failed', err));
+  sweepLimitOrders().catch((err) =>
+    log('error', 'limit_order_sweep_failed', { error: err instanceof Error ? err.message : String(err) }),
+  );
 }, 10_000);
 
 /**
@@ -200,15 +216,43 @@ app.get('/api/funding/:symbol', validate('params', FundingRateParamsSchema), wra
     const rate = await getFundingRate(symbol);
     res.json(rate);
   } catch (err: any) {
-    console.error('Funding rate error', err);
+    log('error', 'funding_rate_fetch_failed', { requestId: req.requestId, symbol, error: err.message });
     res.status(500).json({ error: err.message || 'Funding rate fetch failed' });
   }
 }));
 
+// Liveness: is the process up at all. Deliberately dependency-free -- this
+// must return 200 even if Postgres or the market-data feed is down, since
+// those are exactly the conditions /api/ready exists to surface separately.
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) });
+});
+
+// Readiness: are this process's actual dependencies (database, market-data
+// feed) usable right now. See observability/readiness.ts for why this is a
+// separate, independently unit-tested module rather than inlined here.
+app.get('/api/ready', wrapAsync(async (_req, res) => {
+  const readiness = await checkReadiness();
+  res.status(readiness.ready ? 200 : 503).json(readiness);
+}));
+
+// Consolidated view of the counters/metrics this pass adds -- API request
+// counts/durations, order rejections, provider retry exhaustion -- plus the
+// pre-existing WS and market-data health signals, in one place. Does not
+// replace /api/market-data/health or /api/websocket/metrics (kept for
+// backward compatibility with anything already depending on their shape).
+app.get('/api/observability/metrics', (_req, res) => {
+  res.json({
+    ...metricsSnapshot(),
+    websocket: wsServer.getMetrics(),
+    marketData: getIngestionHealth(),
+  });
+});
+
 // Global error handler.  If any wrapped route throws an error it will
 // arrive here.  Avoid exposing stack traces to clients in production.
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled route error:', err);
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  log('error', 'unhandled_route_error', { requestId: req.requestId, route: req.path, error: err?.message ?? String(err) });
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
@@ -216,6 +260,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // environment variable.  A message is printed to the console on start.
 const PORT = env.PORT;
 app.listen(PORT, () => {
-  console.log(`HTTP server listening on http://localhost:${PORT}`);
-  console.log(`WebSocket server listening on ws://localhost:${env.WS_PORT}`);
+  log('info', 'server_started', { httpPort: PORT, wsPort: env.WS_PORT });
 });

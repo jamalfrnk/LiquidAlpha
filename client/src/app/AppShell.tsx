@@ -6,6 +6,8 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../features/auth/AuthProvider';
 import { useMarketDataSocket } from '../features/realtime/useMarketDataSocket';
+import { ConnectionStatus } from '../features/realtime/ConnectionStatus';
+import { ErrorBoundary } from './ErrorBoundary';
 import { NAV_ITEMS } from '../routes/nav';
 
 function truncateAddress(address: string): string {
@@ -15,7 +17,7 @@ function truncateAddress(address: string): string {
 export function AppShell({ children }: { children: ReactNode }) {
   // Mounted once here, not per-page -- every screen reads the same
   // WS-updated query cache instead of each opening its own socket.
-  useMarketDataSocket();
+  const wsStatus = useMarketDataSocket();
 
   const [location] = useLocation();
   const { user, logout } = useAuth();
@@ -58,7 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border-subtle bg-bg-elevated/60 px-6 backdrop-blur">
-          <div />
+          <ConnectionStatus status={wsStatus} />
           <div className="flex items-center gap-3">
             {user && (
               <Badge variant="brand" className="tabular-nums">
@@ -72,7 +74,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 animate-fade-in px-8 py-8">{children}</main>
+        <main className="flex-1 animate-fade-in px-8 py-8">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
       </div>
     </div>
   );

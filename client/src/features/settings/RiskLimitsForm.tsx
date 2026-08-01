@@ -205,6 +205,9 @@ export function RiskLimitsForm() {
         {mutation.isError && (
           <p role="alert" className="text-sm text-short">
             {mutation.error instanceof ApiError ? mutation.error.message : 'Failed to save risk limits.'}
+            {mutation.error instanceof ApiError && mutation.error.requestId && (
+              <span className="ml-1 text-ink-muted">(ref: {mutation.error.requestId})</span>
+            )}
           </p>
         )}
 

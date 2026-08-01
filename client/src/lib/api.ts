@@ -5,6 +5,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly details?: unknown,
+    /** From the server's `X-Request-Id` response header -- lets a user quote a stable reference when reporting a failure, and lets it be cross-referenced against the server's own structured logs for the same request. */
+    public readonly requestId?: string,
   ) {
     super(message);
   }
@@ -37,7 +39,7 @@ export async function apiRequest<T>(method: Method, path: string, body?: unknown
     } catch {
       // Response body wasn't JSON -- fall back to the generic message.
     }
-    throw new ApiError(message, res.status, details);
+    throw new ApiError(message, res.status, details, res.headers.get('X-Request-Id') ?? undefined);
   }
 
   if (res.status === 204) return undefined as T;

@@ -12,7 +12,7 @@ import { normalizeAddress } from './address';
 import { issueNonce, consumeNonce } from './nonce';
 import { buildSignMessage } from './message';
 import { verifySignature } from './signature';
-import { findOrCreateUser } from './users';
+import { findOrCreateUser, createGuestUser } from './users';
 import { createSession, verifySessionToken, revokeSession } from './session';
 import { setSessionCookie, clearSessionCookie, SESSION_COOKIE_NAME } from './cookie';
 
@@ -85,7 +85,31 @@ authRouter.post(
     const session = await createSession(user.id);
     setSessionCookie(res, session.token, session.expiresAt);
 
-    res.json({ user: { id: user.id, address: user.address, chain: user.chain, builderCode: user.builderCode } });
+    res.json({
+      user: { id: user.id, address: user.address, chain: user.chain, builderCode: user.builderCode, kind: user.kind },
+    });
+  }),
+);
+
+/**
+ * Creates a brand-new guest-practice identity and session -- no wallet, no
+ * signature, no request body. Rate-limited with the same authLimiter as
+ * nonce/verify specifically to bound how many `users` rows an abusive
+ * caller can create per window (AUTH-GUEST-001) -- unlike wallet auth,
+ * there's no external signature cost making repeated calls expensive for
+ * an attacker, so this endpoint is the one most exposed to that.
+ */
+authRouter.post(
+  '/guest',
+  authLimiter,
+  wrapAsync(async (_req, res) => {
+    const user = await createGuestUser();
+    const session = await createSession(user.id);
+    setSessionCookie(res, session.token, session.expiresAt);
+
+    res.json({
+      user: { id: user.id, address: user.address, chain: user.chain, builderCode: user.builderCode, kind: user.kind },
+    });
   }),
 );
 
@@ -98,7 +122,9 @@ authRouter.get(
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json({ user: { id: user.id, address: user.address, chain: user.chain, builderCode: user.builderCode } });
+    res.json({
+      user: { id: user.id, address: user.address, chain: user.chain, builderCode: user.builderCode, kind: user.kind },
+    });
   }),
 );
 

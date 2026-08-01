@@ -1,16 +1,88 @@
-# Wallet and Identity (WALLET-001, issue #32)
+# Wallet and Identity (WALLET-001 issue #32, AUTH-GUEST-001 issue #33)
 
 ## Status: partially implemented
 
 **Implemented:** EIP-6963 multi-wallet discovery, per-wallet disambiguation (no more
 `window.ethereum` last-injector-wins ambiguity), account-change session invalidation,
 wallet-initiated disconnect handling, no-stuck-connecting-state, duplicate-click
-guarding, wallet-selection persistence across refresh.
+guarding, wallet-selection persistence across refresh, server-managed guest-practice
+sessions (no wallet required), guest isolation, guest paper trading through the
+existing risk-gated execution path unmodified.
 
-**Deferred:** guest sessions (`AUTH-GUEST-001` -- until it lands, "wallet disconnect
-returns to guest mode" instead returns to the existing `ConnectScreen`, the closest
-available equivalent today). Server-side auth/session logic (nonce, signature
-verification, session cookies) is unchanged -- this issue is entirely client-side.
+**Deferred:** guest-to-wallet migration (preserving a guest's practice history when
+they later connect a wallet) -- explicitly out of scope for this bounded issue per
+the mission's own instruction to avoid an unsafe partial merge; tracked as a separate
+follow-up. "Wallet disconnect returns to guest mode" is not implemented as an
+automatic transition -- disconnecting a wallet returns to `ConnectScreen`, where
+starting a guest session is one click away, rather than silently and implicitly
+creating a new guest identity on disconnect.
+
+## Guest sessions (AUTH-GUEST-001)
+
+### Problem
+
+Every screen required a connected wallet. No server-managed anonymous/guest session
+type existed -- `server/src/auth/` implemented only wallet-signature sessions.
+
+### Design
+
+A guest is structurally just a `users` row with `kind: 'guest'` (new column, default
+`'wallet'` for every existing/wallet row) and synthetic-but-unique `address`
+(`guest:<uuid>`) / `chain` (`'guest'`) values -- **not** a parallel identity system.
+This was a deliberate structural choice verified before writing any code: grepped
+`execution/`, `risk/`, and `analytics/` for wallet-specific assumptions and found
+none -- every consumer of identity in this codebase already keys off `users.id`
+alone. That means a guest's paper trades flow through the *exact same* risk-gated
+`paperEngine.ts` execution path a wallet user's do, with zero changes to execution,
+risk, or analytics code.
+
+- `POST /api/auth/guest` (new, rate-limited with the same `authLimiter` as
+  nonce/verify): creates a fresh guest user + session, sets the identical httpOnly
+  session cookie a wallet login would. No request body, no signature.
+- Session restore, revocation, and the `requireAuth` middleware are completely
+  unchanged -- they already only cared about `userId`, never about how that user
+  authenticated.
+- Client: `loginAsGuest()` on the auth context, a "Continue as Guest" button on
+  `ConnectScreen` (now the primary/first action, wallet connect is secondary), and
+  `AppShell` shows a neutral "Guest" badge instead of a truncated address when
+  `user.kind === 'guest'`.
+
+### Verified against the real stack, not just mocked
+
+Ran a real local server against a real Postgres, migrated the schema, and exercised
+the actual HTTP endpoints end to end:
+
+1. `POST /api/auth/guest` → real session cookie issued.
+2. `GET /api/auth/me` with that cookie → session correctly restored (same mechanism
+   as a wallet session surviving a refresh).
+3. `GET /api/risk/limits` → real default risk limits auto-created for the guest,
+   identical to a wallet user's.
+4. `POST /api/execution/orders` (a real market order) → **filled at a real
+   Hyperliquid-sourced price** (DATA-HL-001's live ingestion, not a fabricated
+   number) and a real position opened -- through the unmodified, already-risk-gated
+   `paperEngine.ts`.
+5. **Isolation**: created a second, independent guest session. Its
+   `GET /api/execution/positions` returned empty (did not see the first guest's
+   position). Attempting to close the first guest's position by ID from the second
+   guest's session returned **403** -- the pre-existing ownership check in
+   `paperEngine.ts` (already covered by `cancelOrder ownership`/`closePosition
+   ownership` tests) rejects cross-user access identically regardless of whether
+   either side is a guest or a wallet user, with no guest-specific logic needed.
+
+### Non-goals / deferred
+
+- **Guest-to-wallet migration.** Preserving a guest's paper-trading history when they
+  connect a wallet requires transactional safety this bounded issue explicitly
+  didn't attempt (avoiding duplicate orders, avoiding merging unrelated accounts) --
+  per the mission's own instruction, deferred to a separate, dependency-aware issue
+  rather than shipped as an unsafe partial merge. A guest's data is preserved
+  (nothing deletes it), just not yet portable to a subsequently-connected wallet.
+- **Guest data retention/TTL.** No automatic cleanup of abandoned guest rows exists
+  yet -- every `POST /api/auth/guest` call creates a permanent row today. Worth a
+  future look if guest-row volume becomes a real concern; not addressed here.
+- **Automatic wallet-disconnect-to-guest transition.** Disconnecting a wallet doesn't
+  auto-start a new guest session; it returns to `ConnectScreen`, matching how
+  disconnect already worked before this issue.
 
 ## Problem
 

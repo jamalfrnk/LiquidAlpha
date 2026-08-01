@@ -172,6 +172,8 @@ export const priceHistory = pgTable(
   }),
 );
 
+export const userKindEnum = pgEnum('user_kind', ['wallet', 'guest']);
+
 /**
  * The `users` table tracks application users, identified by wallet address.
  * `address` is unique -- one row per wallet -- and `chain` disambiguates the
@@ -180,12 +182,24 @@ export const priceHistory = pgTable(
  * implicit). `builderCode` is a unique referral/attribution label only,
  * never a substitute for `id` as an ownership key -- every FK in this
  * schema points at `users.id`, not `builderCode`.
+ *
+ * `kind` (AUTH-GUEST-001) distinguishes a real wallet identity from a
+ * guest-practice identity. A guest row still populates `address`/`chain`
+ * with synthetic, unique values (`guest:<uuid>` / `'guest'`) rather than
+ * making those columns nullable -- every other table's FK, every existing
+ * query, and the risk/execution engines all key off `users.id` alone and
+ * have no wallet-specific assumptions (verified directly), so a guest is
+ * structurally just a `users` row with `kind: 'guest'`, not a parallel
+ * identity system. This is what lets a guest's paper trades flow through
+ * the exact same risk-gated execution path a wallet user's do, with zero
+ * changes to either.
  */
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   address: varchar('address', { length: 64 }).notNull().unique(),
   chain: varchar('chain', { length: 16 }).notNull(),
   builderCode: varchar('builder_code', { length: 64 }).notNull().unique(),
+  kind: userKindEnum('kind').notNull().default('wallet'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryKeys';
 import { ApiError } from '../../lib/api';
-import { fetchMe, requestNonce, verifySignature, logout as logoutRequest } from './api';
+import { fetchMe, requestNonce, verifySignature, createGuestSession, logout as logoutRequest } from './api';
 import { connectEvmWallet, signMessage } from './wallet';
 import { useEip6963Providers, walletLabel, type EIP6963ProviderDetail } from './eip6963';
 import type { AuthUser } from './types';
@@ -26,6 +26,8 @@ interface AuthContextValue {
    */
   chainId: string | null;
   login: (providerDetail: EIP6963ProviderDetail) => Promise<void>;
+  /** Starts a fresh guest-practice session -- no wallet involved (AUTH-GUEST-001). */
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -150,6 +152,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function loginAsGuest() {
+    // Same duplicate-click guard as wallet login() -- a fast double click
+    // shouldn't create two guest identities in a race.
+    if (isConnecting) return;
+
+    setIsConnecting(true);
+    setConnectError(null);
+    setAccountChangedNotice(null);
+    try {
+      const { user } = await createGuestSession();
+      queryClient.setQueryData(queryKeys.auth.me, { user });
+      // No wallet provider backs a guest session -- clear any previously
+      // selected wallet so a stale accountsChanged listener from an old
+      // wallet session doesn't fire against this new guest identity.
+      setSelectedRdns(null);
+      window.localStorage.removeItem(SELECTED_WALLET_RDNS_KEY);
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to start a guest session';
+      setConnectError(message);
+    } finally {
+      setIsConnecting(false);
+    }
+  }
+
   async function logout() {
     await logoutRequest();
     queryClient.setQueryData(queryKeys.auth.me, { user: null });
@@ -170,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         eip6963Providers,
         chainId,
         login,
+        loginAsGuest,
         logout,
       }}
     >

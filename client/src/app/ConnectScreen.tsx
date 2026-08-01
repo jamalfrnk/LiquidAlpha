@@ -2,10 +2,18 @@ import { useAuth } from '../features/auth/AuthProvider';
 import { isPhantomInstalledWithoutEvmProvider } from '../features/auth/eip6963';
 import { WalletList } from '../features/auth/WalletList';
 import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 
 export function ConnectScreen() {
-  const { login, isConnecting, connectError, accountChangedNotice, dismissAccountChangedNotice, eip6963Providers } =
-    useAuth();
+  const {
+    login,
+    loginAsGuest,
+    isConnecting,
+    connectError,
+    accountChangedNotice,
+    dismissAccountChangedNotice,
+    eip6963Providers,
+  } = useAuth();
 
   const phantomNeedsEvmEnabled = isPhantomInstalledWithoutEvmProvider(eip6963Providers);
 
@@ -26,11 +34,13 @@ export function ConnectScreen() {
           <span className="font-display text-2xl font-semibold tracking-tight text-gold-400">Alpha</span>
         </div>
 
-        <h1 className="font-display text-2xl font-medium tracking-tight text-ink-primary">Sign in with your wallet</h1>
+        <h1 className="font-display text-2xl font-medium tracking-tight text-ink-primary">
+          Practice trading, no wallet required
+        </h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-secondary">
-          No password, no email. Your wallet signs a one-time message to prove ownership -- your private key never
-          leaves your wallet or reaches this server. This signs you in to an educational paper-trading platform; it
-          never approves a transaction.
+          Start a free guest session instantly, or connect a wallet for a persistent identity across devices. Either
+          way, your wallet's private key never leaves your wallet or reaches this server -- signing in only proves
+          ownership, it never approves a transaction.
         </p>
 
         <div className="mt-6">
@@ -49,12 +59,23 @@ export function ConnectScreen() {
           </p>
         )}
 
-        <div className="mt-6">
+        <Button className="mt-6 w-full" size="lg" onClick={() => void loginAsGuest()} disabled={isConnecting}>
+          {isConnecting ? 'Starting session…' : 'Continue as Guest'}
+        </Button>
+
+        <div className="mt-6 flex items-center gap-3 text-xs text-ink-muted">
+          <div className="h-px flex-1 bg-border-subtle" />
+          or connect a wallet
+          <div className="h-px flex-1 bg-border-subtle" />
+        </div>
+
+        <div className="mt-4">
           {eip6963Providers.length > 0 ? (
             <WalletList providers={eip6963Providers} onSelect={(p) => void login(p)} disabled={isConnecting} />
           ) : (
-            <p role="alert" className="text-sm text-short">
-              No compatible EVM wallet was found. Install MetaMask, Rabby, Phantom, or another EIP-1193 wallet.
+            <p className="text-sm text-ink-muted">
+              No compatible EVM wallet was found. Install MetaMask, Rabby, Phantom, or another EIP-1193 wallet -- or
+              continue as a guest above.
             </p>
           )}
         </div>
@@ -79,7 +100,9 @@ export function ConnectScreen() {
         )}
 
         <p className="mt-6 text-xs leading-relaxed text-ink-muted">
-          EVM wallets only (MetaMask, Rabby, Phantom's EVM account, or another EIP-6963-compliant extension).
+          Guest sessions are stored on this server so your practice history persists across a refresh, but aren't
+          portable to another device. EVM wallets only (MetaMask, Rabby, Phantom's EVM account, or another
+          EIP-6963-compliant extension).
         </p>
       </div>
     </div>

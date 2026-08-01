@@ -1,5 +1,14 @@
 # GitHub Repository Audit — `jamalfrnk/LiquidAlpha`
 
+> **Historical record, dated 2026-07-28** — written before the migration described in
+> `docs/migration/REPLIT_TO_GITHUB_PLAN.md` began, when this repository was still a
+> server-only skeleton. It has not been updated since and does not reflect the current
+> codebase. For current-state architecture, see
+> [`docs/architecture/current-state.md`](../architecture/current-state.md); for a
+> current audit methodology and findings, see
+> [`docs/engineering/repository-audit.md`](../engineering/repository-audit.md). Kept
+> as-is because it remains an accurate record of what was true at that point in time.
+
 **Scope:** `server/` (the entire repository — there is no client). 17 files, all inspected directly (no sampling).
 **Method:** Full manual read of every source file, `package.json`, `.env.example`, `tsconfig.json`, `drizzle.config.ts`, `.gitignore`, and `README.md`. No code executed.
 **Status of this repo:** A minimal, honestly-documented skeleton. The README explicitly states the client doesn't exist yet and cites the platform overview PDF as its spec. This is **not** a smaller version of the Replit app — it is an independent, much-earlier-stage rewrite that only implements a slice of backend functionality, and part of what it does implement is broken or disconnected.

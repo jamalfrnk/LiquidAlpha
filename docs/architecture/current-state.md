@@ -68,13 +68,28 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
 
 ## What is NOT yet true (do not assume otherwise)
 
+**Update (2026-07-31, DOC-018 reconciliation pass):** the two items originally listed
+here as gaps — observability and a security test suite — were closed by PR #26
+(`OBS-016`) and PR #24 (`SEC-017`), landed after this doc was first written. Current
+gaps, re-verified as of this reconciliation pass:
+
 - No client test framework — CI's client job explicitly skips a test step today.
 - No lint configuration in either package — CI explicitly warns and skips.
-- No observability layer (structured logs, request IDs, metrics beyond the two ad-hoc
-  `/api/market-data/health` and `/api/websocket/metrics` endpoints) — migration step 16.
-- No analytics-integrity work yet (migration step 15) — no analytics UI exists to audit.
-- No dedicated security test suite (migration step 17) beyond whatever unit coverage
-  exists inside `auth/`, `risk/`, `execution/` today.
+- No analytics-integrity work yet (migration step 15) — no analytics UI exists to audit;
+  blocked pending a product decision on minimum sample-size thresholds
+  ([#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19)), not implemented
+  speculatively.
+- Settings screen for Analytics-style dashboards doesn't exist — only risk-limits
+  editing does (`RiskLimitsForm.tsx`, PR #25); this was the actual scope of the "3rd
+  client PR," not an analytics surface.
+
+Now true (previously listed here as gaps, since resolved):
+- Observability: structured logs, request IDs, `/api/health`/`/api/ready`,
+  `/api/observability/metrics`, a WS connection-status indicator, and an error boundary
+  all landed in PR #26 — see `docs/observability/strategy.md` and `signals.md`.
+- Security test suite: nonce replay/expiry, cross-user ownership (orders/positions), and
+  rate-limit enforcement are regression-tested — see PR #24 and
+  `docs/security/SECURITY_BASELINE.md`'s "Security Test Suite" section.
 - (Risk-to-execution wiring was checked directly in `paperEngine.ts` and confirmed live
   — see above. Not a gap.)
 

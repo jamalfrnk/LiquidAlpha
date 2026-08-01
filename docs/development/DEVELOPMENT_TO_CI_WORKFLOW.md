@@ -38,8 +38,10 @@ Manual merge
 ### 1. Local implementation and tests
 
 Work on a feature branch (`git checkout -b feature/<short-description>`). Write/adjust
-code and tests. Run what's available locally (`npm run build --prefix server`, and `npm
-test` / `npm run lint` once those scripts exist).
+code and tests. Run what's available locally: `npm run build` and `npm test`
+(`vitest run`, real test suite) in `server/`; `npm run typecheck` and `npm run build` in
+`client/` (no test suite there yet). Neither package has a `lint` script configured yet
+-- once one exists, run it too.
 
 ### 2. LiquidAlpha Quality Gate Agent
 
@@ -55,9 +57,10 @@ confirmed in-scope fixes itself, then re-run the gate.
 ### 3. GitHub CI
 
 Push the branch. `.github/workflows/quality-gate.yml` runs the **deterministic** checks —
-lockfile-enforced install, lint (once configured), type check/build, tests (once
-configured), dependency audit, migration sanity check, and a secret scan — with no
-dependency on Claude/API access. This is the pipeline that actually gates merges via
+lockfile-enforced install, lint (once configured), type check/build, server tests (real
+`vitest` suite; client has none configured yet), dependency audit, migration sanity
+check, and a secret scan — with no dependency on Claude/API access. This is the pipeline
+that actually gates merges via
 branch protection / required checks.
 
 ### 4. Draft pull request

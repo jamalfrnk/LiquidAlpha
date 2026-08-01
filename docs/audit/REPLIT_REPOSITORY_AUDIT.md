@@ -1,5 +1,12 @@
 # Replit Reference App Audit — `LiquidAlphaBot`
 
+> **Historical record, dated 2026-07-28** — an audit of the separate, non-canonical
+> `LiquidAlphaBot` Replit export (its own git history, no GitHub remote), used to decide
+> what was worth porting into `jamalfrnk/LiquidAlpha`. It does not describe this
+> repository's current codebase and has not been updated since. For current-state
+> architecture, see [`docs/architecture/current-state.md`](../architecture/current-state.md).
+> Kept as-is as a record of what was found in the reference app at the time.
+
 **Scope:** Full application extracted from Replit (`LiquidAlphaBot.zip`) — `client/` (162 files), `server/` (41 files + subfolders), `shared/schema.ts`, `migrations/`. 989 files total excluding `node_modules`/`.git`/`dist`.
 **Method:** Automated deep-search agent (grep/read across the full tree) followed by manual verification of the single highest-impact claim (route shadowing, below) by directly reading `server/index.ts`, `server/app.ts`, `server/routes.ts`. Everything under "Critical" and "High" has direct file:line evidence; nothing here is a guess about intent.
 **Role of this app in the migration:** Reference implementation only, per your instructions. It is **not** touched, committed, or pushed anywhere — it stays local. This document exists to decide, feature by feature, what's worth porting into the GitHub repo and what should be left behind.

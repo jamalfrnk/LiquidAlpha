@@ -1,5 +1,12 @@
 # Target Architecture
 
+> **Historical record, dated 2026-07-28** — this is the *target* shape written before
+> the migration began, not a description of what has actually been built since. 16 PRs
+> have landed against this target; some details here (e.g. exact state-machine field
+> names) may have evolved during implementation. For what's actually implemented today,
+> see [`docs/architecture/current-state.md`](current-state.md) — read this file as the
+> original design rationale, not current fact.
+
 This adapts the assignment's proposed structure to what the audits actually found — it is not a mechanical copy of a generic template. Rationale for each deviation is called out inline.
 
 ## Domain pipeline

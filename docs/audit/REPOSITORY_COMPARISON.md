@@ -1,5 +1,12 @@
 # Repository Comparison — GitHub Skeleton vs. Replit Reference App
 
+> **Historical record, dated 2026-07-28** — the reuse/refactor/reject decisions below
+> drove the migration backlog (`docs/migration/REPLIT_TO_GITHUB_PLAN.md`) and remain a
+> valid record of those decisions and their rationale. It does not describe the current
+> codebase (most rows describe a "not implemented"/"greenfield" state that 16 merged PRs
+> have since built out). For current-state architecture, see
+> [`docs/architecture/current-state.md`](../architecture/current-state.md).
+
 This matrix drives the migration backlog. For every capability, it states what exists in each repo and how the Replit version of it should be treated per your instructions: **Reuse**, **Refactor before reuse**, **Reimplement cleanly**, or **Reject**.
 
 | Capability | GitHub (`jamalfrnk/LiquidAlpha`) | Replit (`LiquidAlphaBot`) | Classification | Why |

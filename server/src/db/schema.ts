@@ -12,14 +12,68 @@ import { pgTable, uuid, varchar, numeric, timestamp, boolean, index, uniqueIndex
  * which already models it correctly (append-only, queried with a bounded
  * per-symbol limit).
  */
+export const marketSnapshotSourceEnum = pgEnum('market_snapshot_source', ['hyperliquid', 'coingecko']);
+
 export const markets = pgTable('markets', {
   id: uuid('id').defaultRandom().primaryKey(),
   symbol: varchar('symbol', { length: 10 }).notNull().unique(),
   price: numeric('price').notNull(),
   volume: numeric('volume').notNull(),
   change24h: numeric('change_24h').notNull(),
+  /**
+   * Which provider produced this row's current values (DATA-HL-001).
+   * Hyperliquid is primary; `coingecko` means the Hyperliquid fetch failed
+   * and this is display-only fallback data -- callers that would use this
+   * price to drive a new paper fill must check this field rather than
+   * assuming Hyperliquid produced it (that gating itself is
+   * PAPER-REALISM-001's scope, not this column's).
+   */
+  source: marketSnapshotSourceEnum('source').notNull().default('hyperliquid'),
+  /** From Hyperliquid's `meta` endpoint -- null while unset (e.g. CoinGecko-only fallback rows, or before the first successful meta fetch). */
+  szDecimals: integer('sz_decimals'),
+  maxLeverage: integer('max_leverage'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+/**
+ * OHLCV candle history per symbol/interval, sourced from Hyperliquid's
+ * `candleSnapshot` REST endpoint (DATA-HL-001). One row per
+ * (symbol, interval, openTime) -- the unique index makes repeated
+ * ingestion of the same candle an idempotent upsert instead of a
+ * duplicate-row accumulation (the same unbounded-growth mistake `markets`
+ * and `price_history` each had to be fixed for previously, avoided here
+ * from the start). `closed` distinguishes a settled candle from the
+ * currently-in-progress one, which can still legitimately be re-fetched
+ * and updated in place before it closes.
+ */
+export const candles = pgTable(
+  'candles',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    venue: varchar('venue', { length: 20 }).notNull().default('hyperliquid'),
+    symbol: varchar('symbol', { length: 10 }).notNull(),
+    marketType: varchar('market_type', { length: 10 }).notNull().default('perp'),
+    interval: varchar('interval', { length: 5 }).notNull(),
+    openTime: timestamp('open_time').notNull(),
+    closeTime: timestamp('close_time').notNull(),
+    sourceTimestamp: timestamp('source_timestamp').notNull(),
+    receivedAt: timestamp('received_at').notNull(),
+    open: numeric('open').notNull(),
+    high: numeric('high').notNull(),
+    low: numeric('low').notNull(),
+    close: numeric('close').notNull(),
+    volume: numeric('volume').notNull(),
+    closed: boolean('closed').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    symbolIntervalOpenTimeIdx: uniqueIndex('candles_symbol_interval_open_time_idx').on(
+      table.symbol,
+      table.interval,
+      table.openTime,
+    ),
+  }),
+);
 
 /**
  * A signal's lifecycle, replacing a single boolean `active` flag (or, worse,

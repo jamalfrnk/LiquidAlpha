@@ -78,7 +78,10 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
   (issue #29): the sidebar renders inline at `lg:` (1024px) and above, and
   collapses into an off-canvas drawer (`app/MobileNavDrawer.tsx`, built on
   `@radix-ui/react-dialog` for focus-trap/Escape/focus-restoration) below it.
-  Verified at 390/768/1024/1440px with no horizontal overflow.
+  Verified at 390/768/1024/1440px with no horizontal overflow. Wallet connect is
+  EIP-6963-based as of `WALLET-001` (issue #32) -- `ConnectScreen` lists every
+  detected EVM provider by name (no more `window.ethereum`-only/last-injector-wins
+  ambiguity); see `docs/architecture/wallet-and-identity.md`.
 - `routes/` — `OverviewPage`, `SignalsPage`, `PositionsPage`, `AnalyticsPage`,
   `SettingsPage` (+ `nav.ts` for route/nav config). `AnalyticsPage` (PR for
   `feat/analytics-integrity`, migration step 15) and `SettingsPage`'s risk-limits form

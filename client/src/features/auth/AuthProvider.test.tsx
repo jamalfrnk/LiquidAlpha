@@ -129,7 +129,7 @@ describe('AuthProvider: accountsChanged lifecycle (WALLET-001)', () => {
   it('reads the chain once on attach and updates it, informationally, on chainChanged -- never blocking or clearing the session', async () => {
     window.localStorage.setItem(SELECTED_WALLET_RDNS_KEY, 'io.metamask');
     vi.mocked(fetchMe).mockResolvedValue({
-      user: { id: '1', address: '0xSAME', chain: 'evm', builderCode: 'x' },
+      user: { id: '1', address: '0xSAME', chain: 'evm', builderCode: 'x', kind: 'wallet' },
     });
 
     const { provider, handlers } = fakeMetaMaskProvider();

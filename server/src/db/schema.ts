@@ -147,6 +147,24 @@ export const signals = pgTable(
     barCount: integer('bar_count').notNull(),
     dataQuality: varchar('data_quality', { length: 16 }).notNull(),
 
+    /**
+     * The explainable "Signal strength" score (SIGNAL-SCORE-001) -- total
+     * score, direction, per-component breakdown, indicator availability,
+     * freshness status, conflicting/invalidation conditions, and both the
+     * signal-engine and score-model versions, computed by
+     * signals/signalScore.ts at generation time. Stored as jsonb for the
+     * same reason indicatorSnapshot is: a self-contained evidence blob
+     * nothing needs to filter/query by in SQL.
+     *
+     * Nullable, not required: signals generated before this feature shipped
+     * genuinely never had a score computed for them. Backfilling a
+     * synthetic value for those historical rows would be fabricating
+     * evidence that was never actually produced -- the same reasoning
+     * `candleInterval: null` in schemas/signalScore.ts already follows.
+     * Every signal generated from here forward always gets a real one.
+     */
+    signalScore: jsonb('signal_score'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({

@@ -4,6 +4,8 @@ import { getPriceHistory, HISTORY_LIMIT } from './price-history';
 import { ema, macd, rsi, atr, adx, fisherTransform, keltnerChannel } from './indicators';
 import { STALE_AFTER_MS } from './market-data/ingestion';
 import { isGloballyHalted } from './risk/killSwitch';
+import { computeSignalScore } from './signals/signalScore';
+import type { SignalScore } from './schemas/signalScore';
 
 /**
  * Signal generation engine.
@@ -147,6 +149,11 @@ export function evaluateSignal(closes: number[]): SignalEvaluation | null {
   };
 }
 
+/** IndicatorSnapshot stores raw NaN for indicators still in their warm-up period (see the `.some(isNaN)` gate above, which only applies to the required ones); computeSignalScore expects `null` for "unavailable" rather than NaN. */
+function nanToNull(value: number): number | null {
+  return isNaN(value) ? null : value;
+}
+
 /**
  * Generates trading signals for a fixed set of assets. Fetches recent price
  * history, applies a stale-price guard (skips a symbol entirely if its most
@@ -194,6 +201,25 @@ export async function generateSignals(): Promise<void> {
       continue;
     }
 
+    const snapshot = evaluation.indicatorSnapshot;
+    const signalScore: SignalScore = computeSignalScore({
+      ema50: nanToNull(snapshot.ema50),
+      ema200: nanToNull(snapshot.ema200),
+      macdHist: nanToNull(snapshot.macdHist),
+      rsi: nanToNull(snapshot.rsi),
+      adx: nanToNull(snapshot.adx),
+      fisher: nanToNull(snapshot.fisher),
+      keltnerUpper: nanToNull(snapshot.keltnerUpper),
+      keltnerLower: nanToNull(snapshot.keltnerLower),
+      atr: nanToNull(snapshot.atr),
+      price: evaluation.entryPrice,
+      dataAgeMs,
+      staleAfterMs: STALE_AFTER_MS,
+      signalEngineVersion: evaluation.ruleVersion,
+      sourceDataFrom: chronological[0].timestamp.toISOString(),
+      sourceDataTo: mostRecent.timestamp.toISOString(),
+    });
+
     await db.insert(signals).values({
       asset: symbol,
       signalType: evaluation.signalType,
@@ -206,6 +232,7 @@ export async function generateSignals(): Promise<void> {
       takeProfit: evaluation.takeProfit.toString(),
       riskRewardRatio: evaluation.riskRewardRatio.toString(),
       indicatorSnapshot: evaluation.indicatorSnapshot,
+      signalScore,
       dataFrom: chronological[0].timestamp,
       dataTo: mostRecent.timestamp,
       barCount: chronological.length,

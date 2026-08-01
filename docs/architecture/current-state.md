@@ -74,7 +74,13 @@ Inline (not yet router-extracted) endpoints on `server.ts` directly:
   (`websocket/` module, PR #11 — real per-channel/per-symbol subscriptions, not global
   broadcast).
 - `GET /api/signals` (paginated, Zod-validated query), `POST /api/signals/generate`
-  (Zod-validated body) — evidence-preserving signal engine (PR #12).
+  (Zod-validated body) — evidence-preserving signal engine (PR #12). Each generated
+  signal now also carries an explainable "Signal strength" score (`SIGNAL-SCORE-001`,
+  issue #37) — a deterministic, versioned 0-100 score with a six-component breakdown,
+  conflict/invalidation detection, and freshness/availability tracking, computed by
+  `signals/signalScore.ts` and stored in the nullable `signals.signal_score` jsonb
+  column (null for signals generated before this feature shipped) — see
+  `docs/product/signal-strength.md`.
 - `GET /api/stats`, `GET /api/funding/:symbol` (Zod-validated params).
 
 Cross-cutting: `middleware/requireAuth.ts`, `middleware/rateLimit.ts`,

@@ -16,6 +16,28 @@ LiquidAlpha-github/
 └── client/   Vite 6 + React 18, TanStack Query, Radix/shadcn, Tailwind, wouter
 ```
 
+## Deployment (`DEPLOY-001`, issue #30)
+
+Two distinct modes, both driven by `server/src/server.ts`:
+
+- **Development** (`npm run dev` in both packages, `NODE_ENV` unset): unchanged
+  split-origin setup -- Vite serves the client on `:5173`, the API/WS server
+  listens on `PORT` (default `3001`) for HTTP and a separate `WS_PORT`
+  (default `8080`) for WebSocket upgrades. `CORS_ORIGIN` allows the client's
+  dev origin to call the API cross-origin with credentials.
+- **Production** (`NODE_ENV=production node dist/server.js`, after
+  `npm run build` in both packages): single origin. The server serves
+  `client/dist` as static files (hashed assets cached immutable, `index.html`
+  no-cache), falls back unmatched non-`/api` GETs to `index.html` for SPA
+  client-side routing, and the WebSocket server attaches to the same
+  `http.Server` instance instead of opening its own port -- one public
+  `PORT`, bound to `0.0.0.0`. Verified locally: root/API/SPA-fallback/404
+  shapes, cache headers, and a real WS upgrade all confirmed working on the
+  shared port; dev mode's split-origin behavior re-verified unaffected.
+
+Replit-specific config/runbook is `REPLIT-READY-001`'s scope, built on top of
+this.
+
 ## Server (`server/src/server.ts` entrypoint)
 
 Middleware chain: CORS (explicit allow-list) → `express.json()` → `cookie-parser` →

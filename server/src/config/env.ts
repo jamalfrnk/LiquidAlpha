@@ -23,6 +23,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   WS_PORT: z.coerce.number().int().positive().default(8080),
   HYPERLIQUID_API_URL: z.string().url().default('https://api.hyperliquid.xyz'),
+  /** Public WebSocket endpoint for the shared allMids connection (DATA-RECOVERY-001). */
+  HYPERLIQUID_WS_URL: z.string().url().default('wss://api.hyperliquid.xyz/ws'),
   HYPERLIQUID_API_KEY: z.string().optional(),
   COINGECKO_API_KEY: z.string().optional(),
 

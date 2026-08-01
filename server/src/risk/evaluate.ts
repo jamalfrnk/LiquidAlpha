@@ -1,4 +1,11 @@
-import { checkPositionSize, checkLeverage, checkMaxOpenPositions, checkPriceDeviation, checkStalePrice } from './limits';
+import {
+  checkPositionSize,
+  checkLeverage,
+  checkMaxOpenPositions,
+  checkPriceDeviation,
+  checkStalePrice,
+  checkTrustworthySource,
+} from './limits';
 
 export interface TradeIntent {
   notionalSize: number;
@@ -7,6 +14,8 @@ export interface TradeIntent {
   requestedPrice: number;
   currentMarketPrice: number;
   marketDataAgeMs: number;
+  /** 'hyperliquid' | 'coingecko' -- see checkTrustworthySource (DATA-RECOVERY-001). */
+  marketDataSource: string;
 }
 
 export interface RiskLimitConfig {
@@ -34,6 +43,7 @@ export interface RiskEvaluation {
 export function evaluateTrade(intent: TradeIntent, limits: RiskLimitConfig): RiskEvaluation {
   const results = [
     checkStalePrice(intent.marketDataAgeMs, limits.maxDataAgeMs),
+    checkTrustworthySource(intent.marketDataSource),
     checkPriceDeviation(intent.requestedPrice, intent.currentMarketPrice, limits.maxPriceDeviationPercent),
     checkPositionSize(intent.notionalSize, limits.maxPositionSize),
     checkLeverage(intent.leverage, limits.maxLeverage),

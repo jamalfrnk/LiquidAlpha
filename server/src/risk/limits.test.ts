@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { checkPositionSize, checkLeverage, checkMaxOpenPositions, checkPriceDeviation, checkStalePrice } from './limits';
+import {
+  checkPositionSize,
+  checkLeverage,
+  checkMaxOpenPositions,
+  checkPriceDeviation,
+  checkStalePrice,
+  checkTrustworthySource,
+} from './limits';
 
 describe('checkPositionSize', () => {
   it('passes at or under the max', () => {
@@ -55,5 +62,16 @@ describe('checkStalePrice', () => {
     const result = checkStalePrice(31_000, 30_000);
     expect(result.passed).toBe(false);
     expect(result.reason).toMatch(/stale|old|exceeding/i);
+  });
+});
+
+describe('checkTrustworthySource (DATA-RECOVERY-001)', () => {
+  it('passes when the reference price is Hyperliquid-sourced', () => {
+    expect(checkTrustworthySource('hyperliquid').passed).toBe(true);
+  });
+  it('fails when the reference price is CoinGecko-fallback-sourced, with a reason naming the actual source', () => {
+    const result = checkTrustworthySource('coingecko');
+    expect(result.passed).toBe(false);
+    expect(result.reason).toMatch(/coingecko/i);
   });
 });

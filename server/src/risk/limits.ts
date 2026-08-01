@@ -70,3 +70,25 @@ export function checkStalePrice(dataAgeMs: number, maxAgeMs: number): RiskCheckR
   }
   return ok();
 }
+
+/**
+ * A new order must be priced against a genuinely Hyperliquid-sourced
+ * reference, not a CoinGecko fallback row (DATA-RECOVERY-001) --
+ * `checkStalePrice` alone doesn't catch this case: when Hyperliquid is down
+ * and the CoinGecko fallback engages, `runIngestionCycle` still refreshes
+ * `markets.updatedAt` on every successful CoinGecko poll, so a fallback
+ * price can look perfectly "fresh" by age while still being exactly the
+ * kind of aggregate-market price the mission says must never silently
+ * drive a new Hyperliquid paper fill. Closing an existing position is
+ * deliberately not gated by this -- the mission only requires blocking
+ * *new* orders, not preventing a user from exiting on the only price
+ * currently available.
+ */
+export function checkTrustworthySource(source: string): RiskCheckResult {
+  if (source !== 'hyperliquid') {
+    return fail(
+      `Reference price is currently sourced from ${source} (Hyperliquid feed unavailable), not a trustworthy execution reference -- new orders are blocked until it recovers`,
+    );
+  }
+  return ok();
+}

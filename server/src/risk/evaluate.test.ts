@@ -16,6 +16,7 @@ const goodIntent: TradeIntent = {
   requestedPrice: 100,
   currentMarketPrice: 100,
   marketDataAgeMs: 1000,
+  marketDataSource: 'hyperliquid',
 };
 
 describe('evaluateTrade', () => {
@@ -33,6 +34,7 @@ describe('evaluateTrade', () => {
       requestedPrice: 110, // over deviation
       currentMarketPrice: 100,
       marketDataAgeMs: 1000,
+      marketDataSource: 'hyperliquid',
     };
     const result = evaluateTrade(badIntent, limits);
     expect(result.passed).toBe(false);
@@ -44,5 +46,12 @@ describe('evaluateTrade', () => {
     expect(result.passed).toBe(false);
     expect(result.failures.length).toBe(1);
     expect(result.failures[0]).toMatch(/old|stale|exceeding/i);
+  });
+
+  it('fails when the reference price is CoinGecko-fallback-sourced, even when every other check would pass (DATA-RECOVERY-001)', () => {
+    const result = evaluateTrade({ ...goodIntent, marketDataSource: 'coingecko' }, limits);
+    expect(result.passed).toBe(false);
+    expect(result.failures.length).toBe(1);
+    expect(result.failures[0]).toMatch(/coingecko/i);
   });
 });

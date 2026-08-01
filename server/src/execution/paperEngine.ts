@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { STALE_AFTER_MS } from '../market-data/ingestion';
 import { isGloballyHalted, isUserHalted } from '../risk/killSwitch';
 import { evaluateTrade } from '../risk/evaluate';
+import { checkTrustworthySource } from '../risk/limits';
 import { getOrCreateRiskLimits } from '../risk/userLimits';
 import { applySlippage } from './slippage';
 import { isMarketable } from './marketability';
@@ -113,6 +114,7 @@ async function processNewOrder(order: typeof orders.$inferSelect): Promise<Order
       requestedPrice,
       currentMarketPrice: marketPrice,
       marketDataAgeMs: dataAgeMs,
+      marketDataSource: market.source,
     },
     {
       maxPositionSize: parseFloat(limits.maxPositionSize),
@@ -247,6 +249,15 @@ export async function sweepLimitOrders(): Promise<void> {
 
     const marketable = isMarketable('LIMIT', order.side, parseFloat(order.limitPrice!), parseFloat(market.price));
     if (!marketable) continue;
+    // A resting limit order becoming marketable is still a *new* fill --
+    // the same fallback-source gate the initial order-placement path
+    // applies (see checkTrustworthySource) has to hold here too, or a
+    // CoinGecko-fallback price could silently trigger fills this sweep
+    // runs unattended, with no user in the loop to notice. Left resting
+    // (not rejected/cancelled) since the order itself was accepted while
+    // Hyperliquid was still up -- it should fill once a trustworthy price
+    // is available again, not be punished for a feed outage after the fact.
+    if (!checkTrustworthySource(market.source).passed) continue;
 
     const existingPosition = await getOpenPosition(order.userId, order.asset);
     if (existingPosition && existingPosition.side !== order.side) continue; // still blocked -- leave resting

@@ -62,7 +62,14 @@ Inline (not yet router-extracted) endpoints on `server.ts` directly:
   issue #34 — see `docs/architecture/market-data.md`). `runCandleBackfillCycle` backfills
   all four chart-supported intervals (1m/5m/15m/1h) as of `CHART-001` (issue #36) — it
   originally only backfilled 1m, found and fixed while building the chart UI that needed
-  the other three.
+  the other three. `DATA-RECOVERY-001` (issue #35) added a real shared Hyperliquid
+  WebSocket connection (`hyperliquidWs.ts`) with reconnect/backoff and silent-stall
+  detection, feeding a 1s per-symbol broadcast loop; `/api/market-data/health` now
+  reports a `mode: live | degraded | fallback | unavailable` computed from combined
+  WS + REST ingestion health (`marketHealth.ts`), and a new risk check
+  (`checkTrustworthySource`) blocks any new paper order — including a resting limit
+  order becoming marketable — from executing against a CoinGecko-fallback-sourced
+  price.
 - `GET /api/websocket/metrics` — connection/subscription observability for the WS layer
   (`websocket/` module, PR #11 — real per-channel/per-symbol subscriptions, not global
   broadcast).

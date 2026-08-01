@@ -28,7 +28,16 @@ import { executionRouter } from './execution/router';
 import { analyticsRouter } from './analytics/router';
 import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
-import { runIngestionCycle, runCandleBackfillCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
+import {
+  runIngestionCycle,
+  runCandleBackfillCycle,
+  getIngestionHealth,
+  getLastKnownMarketMeta,
+  STALE_AFTER_MS,
+  TRACKED_SYMBOLS,
+} from './market-data/ingestion';
+import { connectHyperliquidWs } from './market-data/hyperliquidWs';
+import { computeMarketDataMode } from './market-data/marketHealth';
 import { requestContext, RESPONSE_REQUEST_ID_HEADER } from './observability/requestContext';
 import { httpLogger } from './observability/httpLogger';
 import { log } from './observability/logger';
@@ -140,6 +149,44 @@ const httpServer = http.createServer(app);
 const wsServer = createMarketDataWsServer(isProduction ? httpServer : env.WS_PORT);
 
 /**
+ * The one shared upstream Hyperliquid connection this whole process uses
+ * for current prices (DATA-RECOVERY-001) -- regardless of how many
+ * browser clients are connected to *this* app's own WS server above, only
+ * one connection to Hyperliquid itself exists. `runIngestionCycle` (10s
+ * REST poll, unchanged) remains the sole writer of `markets`/candles and
+ * the sole source of 24h-change/volume/source -- this connection only
+ * supplies a faster current-price signal on top of it, coalesced to
+ * roughly once a second per the mission's guidance rather than
+ * republishing on every individual Hyperliquid message.
+ */
+const hyperliquidWs = connectHyperliquidWs(env.HYPERLIQUID_WS_URL, () => {
+  /* handled by the coalescing interval below, not per-message -- see PUBLISH_INTERVAL_MS */
+});
+
+const PRICE_PUBLISH_INTERVAL_MS = 1_000;
+setInterval(() => {
+  const mids = hyperliquidWs.getMids();
+  for (const symbol of TRACKED_SYMBOLS) {
+    const price = mids[symbol];
+    if (!price) continue; // Hyperliquid hasn't reported this symbol over WS yet -- REST ingestion still covers it.
+    const meta = getLastKnownMarketMeta(symbol);
+    if (!meta) continue; // No REST cycle has completed yet -- nothing to merge change24h/volume/source from.
+    wsServer.publishMarketUpdate(symbol, 'marketUpdate', {
+      symbol,
+      price: Number(price),
+      change24h: Number(meta.change24h),
+      volume: Number(meta.volume),
+      // A live Hyperliquid WS mid is, by definition, Hyperliquid-sourced --
+      // independent of whatever the last REST cycle's source happened to
+      // be (e.g. if REST last fell back to CoinGecko but the WS has since
+      // recovered).
+      source: 'hyperliquid',
+      timestamp: new Date(),
+    });
+  }
+}, PRICE_PUBLISH_INTERVAL_MS);
+
+/**
  * Periodically generate trading signals.
  *
  * Every 30 seconds this function invokes the signal generator to
@@ -221,9 +268,16 @@ app.get(
 // Reports whether the market-data ingestion loop is currently healthy --
 // Hyperliquid primary, CoinGecko fallback (see getIngestionHealth's
 // `lastSuccessSource`) -- distinct from whether any individual market row
-// happens to be stale.
+// happens to be stale. `mode`/`hyperliquidWs` add the shared-WS-connection
+// state (DATA-RECOVERY-001) on top of the pre-existing REST-cycle health.
 app.get('/api/market-data/health', (_req, res) => {
-  res.json(getIngestionHealth());
+  const ingestionHealth = getIngestionHealth();
+  const wsHealth = hyperliquidWs.getHealth();
+  res.json({
+    ...ingestionHealth,
+    mode: computeMarketDataMode(wsHealth, ingestionHealth),
+    hyperliquidWs: wsHealth,
+  });
 });
 
 // Server-side fan-out visibility: how many connections and subscriptions

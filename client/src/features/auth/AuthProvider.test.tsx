@@ -18,8 +18,7 @@ vi.mock('./api', () => ({
 import { fetchMe, createGuestSession } from './api';
 
 function TestConsumer() {
-  const { user, accountChangedNotice, loginAsGuest } = useAuth();
-  const { user, accountChangedNotice, chainId } = useAuth();
+  const { user, accountChangedNotice, loginAsGuest, chainId } = useAuth();
   return (
     <div>
       <div data-testid="user">{user ? user.address : 'none'}</div>

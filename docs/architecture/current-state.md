@@ -50,7 +50,11 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
 ## Client (`client/src/`)
 
 - `app/App.tsx`, `app/AppShell.tsx`, `app/ConnectScreen.tsx` — auth-gated shell and
-  wallet-connect entry (PR #15).
+  wallet-connect entry (PR #15). `AppShell` is responsive as of `UI-RESP-001`
+  (issue #29): the sidebar renders inline at `lg:` (1024px) and above, and
+  collapses into an off-canvas drawer (`app/MobileNavDrawer.tsx`, built on
+  `@radix-ui/react-dialog` for focus-trap/Escape/focus-restoration) below it.
+  Verified at 390/768/1024/1440px with no horizontal overflow.
 - `routes/` — `OverviewPage`, `SignalsPage`, `PositionsPage`, `AnalyticsPage`,
   `SettingsPage` (+ `nav.ts` for route/nav config). `AnalyticsPage` (PR for
   `feat/analytics-integrity`, migration step 15) and `SettingsPage`'s risk-limits form

@@ -35,10 +35,13 @@ specifically was never distinguished from a Solana-only context.
 - `features/auth/WalletList.tsx` (new): renders every detected provider by its
   announced icon + label; never a hardcoded three-wallet list.
 - `features/auth/AuthProvider.tsx` (rewritten): `login()` now takes a specific
-  `EIP6963ProviderDetail`. Attaches `accountsChanged`/`disconnect` listeners to the
-  active provider once both it and an authenticated `user` are known; persists the
-  selected wallet's `rdns` to `localStorage` so a refreshed page re-attaches
-  listeners to the same wallet without requiring a new connection.
+  `EIP6963ProviderDetail`. Attaches `accountsChanged`/`disconnect`/`chainChanged`
+  listeners to the active provider once both it and an authenticated `user` are
+  known; persists the selected wallet's `rdns` to `localStorage` so a refreshed page
+  re-attaches listeners to the same wallet without requiring a new connection.
+  `chainChanged` is informational only (exposed as `chainId` on the auth context) --
+  this is a paper-trading platform, so a chain switch never blocks anything or forces
+  a network change, matching the mission's explicit requirement for this case.
 - `app/ConnectScreen.tsx` (rewritten): renders the wallet list when providers are
   detected, the mission's exact "No compatible EVM wallet was found..." copy when
   none are, and a Phantom-specific hint (`isPhantomInstalledWithoutEvmProvider`) when
@@ -60,6 +63,7 @@ specifically was never distinguished from a Solana-only context.
 | Duplicate/concurrent connect clicks | Guarded (`if (isConnecting) return`) | Code review; not independently stress-tested under real race conditions in this pass |
 | Browser refresh | Session restored via existing cookie-based `fetchMe` query, unchanged; listeners re-attached to the same wallet via persisted `rdns` if still installed | Code review (this path was already correct pre-WALLET-001 for the session itself; this issue only adds the listener re-attachment on top) |
 | No `window.location.reload()` anywhere | Confirmed by inspection -- none introduced | `grep` across the touched files |
+| Chain change while connected | `chainId` updates (context value), no forced switch | Code review -- `chainChanged` listener + an initial `eth_chainId` read on attach; not independently CDP-verified in this pass (added as a rework fix after review flagged its initial absence) |
 
 CDP screenshots (guest connect screen: two-wallet list, zero-wallet state, and the
 post-click state showing a real server-rejected fake signature -- confirming the
@@ -72,8 +76,10 @@ script via CDP's `Page.addScriptToEvaluateOnNewDocument` before navigation.
 
 - No Solana wallet connection flow.
 - No hardware-wallet-specific handling beyond what EIP-1193 already provides.
-- No chain-switch enforcement (chain changes are informational only, paper trading
-  doesn't require a specific network).
+- No chain-switch *enforcement* -- the mission requires `chainChanged` handling to
+  exist (it does, see the table above) but explicitly says it should never force a
+  network switch, since this is a paper-trading platform with no on-chain execution
+  to protect. The non-goal is enforcement/blocking, not observing the event at all.
 
 ## Known limitations
 

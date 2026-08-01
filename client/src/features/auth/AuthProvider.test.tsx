@@ -19,12 +19,14 @@ import { fetchMe, createGuestSession } from './api';
 
 function TestConsumer() {
   const { user, accountChangedNotice, loginAsGuest } = useAuth();
+  const { user, accountChangedNotice, chainId } = useAuth();
   return (
     <div>
       <div data-testid="user">{user ? user.address : 'none'}</div>
       <div data-testid="kind">{user ? user.kind : 'none'}</div>
       <div data-testid="notice">{accountChangedNotice ?? 'none'}</div>
       <button onClick={() => void loginAsGuest()}>Continue as Guest</button>
+      <div data-testid="chainId">{chainId ?? 'none'}</div>
     </div>
   );
 }
@@ -32,7 +34,10 @@ function TestConsumer() {
 function fakeMetaMaskProvider(): { provider: EIP1193Provider; handlers: Map<string, (...args: unknown[]) => void> } {
   const handlers = new Map<string, (...args: unknown[]) => void>();
   const provider: EIP1193Provider = {
-    request: vi.fn(),
+    // AuthProvider reads eth_chainId once on attach (chainChanged handling) --
+    // give it a real resolved value so that call doesn't reject/hang in tests
+    // that don't care about chain state.
+    request: vi.fn().mockResolvedValue('0x1'),
     on: (event, listener) => {
       handlers.set(event, listener as (...args: unknown[]) => void);
     },
@@ -118,6 +123,37 @@ describe('AuthProvider: accountsChanged lifecycle (WALLET-001)', () => {
 
     // Give any (incorrect) state change a moment to happen, then assert it didn't.
     await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByTestId('user').textContent).toBe('0xSAME');
+    expect(screen.getByTestId('notice').textContent).toBe('none');
+  });
+
+  it('reads the chain once on attach and updates it, informationally, on chainChanged -- never blocking or clearing the session', async () => {
+    window.localStorage.setItem(SELECTED_WALLET_RDNS_KEY, 'io.metamask');
+    vi.mocked(fetchMe).mockResolvedValue({
+      user: { id: '1', address: '0xSAME', chain: 'evm', builderCode: 'x' },
+    });
+
+    const { provider, handlers } = fakeMetaMaskProvider();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TestConsumer />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    announceMetaMask(provider);
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('0xSAME'));
+    // The initial eth_chainId read (mocked to '0x1' in fakeMetaMaskProvider) resolves asynchronously.
+    await waitFor(() => expect(screen.getByTestId('chainId').textContent).toBe('0x1'));
+
+    await waitFor(() => expect(handlers.has('chainChanged')).toBe(true));
+    handlers.get('chainChanged')!('0x89'); // e.g. switched to Polygon
+
+    await waitFor(() => expect(screen.getByTestId('chainId').textContent).toBe('0x89'));
+    // Purely informational -- session and user are untouched by a chain change.
     expect(screen.getByTestId('user').textContent).toBe('0xSAME');
     expect(screen.getByTestId('notice').textContent).toBe('none');
   });

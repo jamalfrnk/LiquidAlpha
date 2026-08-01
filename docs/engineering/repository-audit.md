@@ -100,11 +100,11 @@ would ask for. Cross-referencing it against merged PRs:
 | 11 risk-engine separation | `feat/risk-engine` | done (PR #13) — PR title said "not yet wired to execution" at merge; **confirmed wired by PR #14** (`paperEngine.ts` calls kill-switch + `evaluateTrade` + limits, rejects on failure) |
 | 12 paper-trading execution | `feat/paper-trading` | done (PR #14) |
 | 13 UI shell | `feat/client-shell` | done (PR #15) |
-| 14 signal/execution UX | `feat/signals-ux` (PR #16), `feat/positions-ux` (PR #17) | **2 of 3 client PRs done** — 3rd (Settings risk-limits form, confirmed via `SettingsPage.tsx` placeholder) tracked as [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) |
-| 15 analytics integrity | `feat/analytics-integrity` | **not started** — tracked as [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) |
-| 16 observability | `feat/observability` | **not started** — tracked as [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) |
-| 17 security test suite | `test/security-suite` | **not started** — tracked as [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) |
-| 18 doc/cleanup pass | — | **not started** — tracked as [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) |
+| 14 signal/execution UX | `feat/signals-ux` (PR #16), `feat/positions-ux` (PR #17), `feat/settings-risk-limits` (PR #25) | done, 3 of 3 client PRs — [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) |
+| 15 analytics integrity | `feat/analytics-integrity` | **blocked** on a product decision (minimum sample-size threshold) — [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) |
+| 16 observability | `feat/observability` | done (PR #26) — [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) |
+| 17 security test suite | `test/security-suite` | done (PR #24), scoped down from the original CSRF/oversized-payload list — [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) |
+| 18 doc/cleanup pass | `docs/reconciliation-pass` | done (this PR) — [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) |
 
 This table, not a newly invented epic list, is the accurate current backlog. Any new
 production-readiness backlog this project produces should extend this table rather than

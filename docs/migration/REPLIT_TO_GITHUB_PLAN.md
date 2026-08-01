@@ -2,6 +2,8 @@
 
 Prioritized backlog, ordered per the assignment's implementation sequence, informed by what the audits actually found. Each item lists: what it is, why it's at this position, source material (if any), and rough scope. Each becomes its own small PR — never one large migration PR.
 
+> **Status reconciliation (2026-07-31):** [`docs/engineering/repository-audit.md`](../engineering/repository-audit.md) cross-references every step below against actual merged PRs in one table. Steps 1–14, 16, and 17 are done. Step 15 (analytics integrity) is blocked pending a product decision (see its entry below and issue [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19)) -- not fabricated as done to make this list look complete. Step 18 (this one) is done as of this PR (`docs/reconciliation-pass`).
+
 ## Sequence
 
 ### 1. Repository audits — `audit/repository-assessment` (this PR)
@@ -49,7 +51,7 @@ New client from scratch (none exists in GitHub). Use Replit's `features/trade`/`
 
 ### 14. Signal and execution UX — `feat/signal-execution-ux`
 Signal cards distinguishing new/expired/triggered/cancelled/invalidated states (from the step-6 state machine), execution confirmation screen showing every field the assignment lists (market, direction, size, leverage, stop/target, fees, max loss, environment, auto-trade status). **Depends on: steps 10, 11, 12, 13.**
-**Status (2026-07-31): 2 of 3 client PRs done** (`feat/signals-ux` PR #16, `feat/positions-ux` PR #17). Remaining: Settings screen (risk-limits editable form) — tracked as [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) (`UI-014C`).
+**Status (2026-07-31): done, 3 of 3 client PRs** (`feat/signals-ux` PR #16, `feat/positions-ux` PR #17, `feat/settings-risk-limits` PR #25 -- [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) / `UI-014C`).
 
 ### 15. Analytics integrity — `feat/analytics-integrity`
 Every metric shown must state its definition, source, date range, sample size, and whether it's backtest/paper/live (assignment requirement). This directly replaces Replit's `Math.random()`-generated Sharpe ratio/max drawdown (C-5) with "insufficient data" states until real closed-trade history exists in volume. **Depends on: step 12 generating real paper-trade history to eventually report on.**
@@ -65,7 +67,7 @@ Nonce replay, expired-nonce rejection, cross-user resource access (regression te
 
 ### 18. Documentation and cleanup
 Final pass — update all docs to match what was actually built (not what was planned), known-limitations doc, remaining tech debt doc.
-**Status: not started.** Tracked as [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) (`DOC-018`).
+**Status (2026-07-31): done** — root `README.md` rewritten to describe the actual current repo; the four pre-migration audit/target docs got a historical-record note pointing to current-state docs (not rewritten or deleted); known tech debt documented in `README.md`'s "Known gaps" section. Tracked as [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) (`DOC-018`).
 
 ## Reusable Replit components (summary — see `REPOSITORY_COMPARISON.md` for full detail)
 `auth-system.ts`'s nonce/signature core, `hyperliquid-real.ts`'s validation/retry pattern, `simAdapter-new.ts`'s slippage/fill model, the dead `technical-analysis.ts`'s Fisher/ADX/Keltner math, `lib/cache.ts`'s TTL+single-flight pattern, the `features/trade`/`features/markets` hook shape.

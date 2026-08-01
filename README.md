@@ -1,102 +1,154 @@
 # LiquidAlpha
 
-LiquidAlpha is a real‑time trading signal dashboard and API for the **Hyperliquid** blockchain ecosystem.  It provides AI‑powered trading signals, risk‑managed trade parameters and live market data via a modern web interface.  The system is designed to be modular so that the backend can run independently of the frontend, and all server code is written in TypeScript for type safety and clarity.
+LiquidAlpha is a real-time, **paper-trading** signal dashboard and API for the
+Hyperliquid blockchain ecosystem: wallet-signature auth, live market data, technical-
+indicator-driven signals, a server-enforced risk engine, and a simulated execution
+workflow, all fronted by a React client.
 
-## Features
-
-* **Real‑time market feed** – fetches live prices for major assets (BTC, ETH, SOL) via the Hyperliquid API and broadcasts updates to all connected clients using WebSockets.
-* **AI‑powered signals** – generates trading signals with a granular confidence score using multiple technical indicators.  The current implementation calculates trending and momentum indicators (EMA50/EMA200, MACD and RSI) and scores signals from 0–100.
-* **Risk management** – attaches stop‑loss and take‑profit levels based on a simple ATR approximation and enforces a minimum 1:2 risk‑reward ratio when creating signals.
-* **REST API and WebSocket** – exposes REST endpoints for markets, signals, configuration and performance metrics, and a WebSocket endpoint for live updates.
-* **Database integration** – persists users, markets, price history, signals and performance statistics using PostgreSQL and the [Drizzle ORM](https://orm.drizzle.team/).  Example schema definitions can be found in `server/src/db/schema.ts`.
-* **Multi‑wallet support** – designed to integrate with EVM wallets (MetaMask, Rabby and WalletConnect via Reown) and Solana wallets (Phantom).  Authentication is signature‑based; private keys are never sent to the server.
+> This repository is being rebuilt from a Replit-era reference app onto a clean GitHub
+> foundation, tracked in [`docs/migration/REPLIT_TO_GITHUB_PLAN.md`](docs/migration/REPLIT_TO_GITHUB_PLAN.md).
+> See [`docs/architecture/current-state.md`](docs/architecture/current-state.md) for the
+> authoritative description of what's actually implemented, verified by reading the code
+> directly rather than inferred from this file or older docs.
 
 ## Repository structure
 
+Two independently built/tested npm packages, no root workspace:
+
 ```
 LiquidAlpha/
-│
-├── README.md             – this file
-└── server/               – Node.js/Express backend
-    ├── package.json      – npm scripts and dependencies
-    ├── tsconfig.json     – TypeScript compiler configuration
-    ├── drizzle.config.ts – database migration configuration
-    ├── .env.example      – template for environment variables
+├── server/    Node 22 + Express 4 + ws, PostgreSQL via Drizzle ORM, Zod validation, vitest
+│   └── src/
+│       ├── auth/            wallet-signature auth (nonce/verify/session)
+│       ├── risk/             risk limits, kill switch, trade evaluation
+│       ├── execution/        paper-trading orders/positions
+│       ├── market-data/      CoinGecko ingestion, staleness tracking
+│       ├── websocket/        per-channel/per-symbol subscriptions
+│       ├── observability/    structured logging, request IDs, metrics, readiness
+│       ├── middleware/       auth guard, rate limiting, request validation
+│       ├── schemas/          shared Zod request/response contracts
+│       └── db/               Drizzle schema + migrations
+└── client/    Vite 6 + React 18, TanStack Query, Radix/shadcn-style UI, Tailwind, wouter
     └── src/
-        ├── db/           – database connection and schema definitions
-        ├── auth.ts       – user registration and login helpers
-        ├── price‑history.ts – price history persistence and retrieval
-        ├── performance.ts – recording and retrieving user PnL
-        ├── indicators.ts – technical indicator calculations (EMA, MACD, etc.)
-        ├── technical‑analysis.ts – signal generation engine
-        ├── hyperliquid‑real.ts – Hyperliquid API wrapper with Zod validation
-        ├── server.ts     – Express server and WebSocket integration
-        └── bootstrap.ts  – global error handlers and helper utilities
+        ├── app/               auth-gated shell, wallet connect, error boundary
+        ├── routes/            Overview / Signals / Positions / Settings
+        └── features/          auth, markets, signals, positions, execution, risk,
+                                 settings, realtime -- one directory per domain
 ```
 
-> **Note**: A client folder is not included in this repository.  The frontend is planned to be built separately using React 18, Radix/shadcn UI components, Tailwind CSS and TanStack Query for state management.  The backend can be developed and tested independently using the REST and WebSocket endpoints described below.
+`docs/` contains the fuller picture: `docs/architecture/` (current state + original target
+architecture), `docs/audit/` (point-in-time audits from before the migration started --
+see the historical-record note at the top of each), `docs/security/`, `docs/observability/`,
+`docs/operations/`, and `docs/migration/REPLIT_TO_GITHUB_PLAN.md` (the sequenced backlog
+this rebuild follows).
 
-## Getting started
+## Running it locally
 
-The server uses Node.js with TypeScript and PostgreSQL.  To run the backend locally you will need a PostgreSQL database available and the following environment variables defined (see `.env.example` for details):
-
-```
-# Required environment variables
-DATABASE_URL=postgresql://user:password@localhost:5432/liquidalpha
-JWT_SECRET=your‑jwt‑secret
-
-# Optional environment variables
-PORT=3001           # HTTP server port (default 3001)
-COINGECKO_API_KEY=… # optional CoinGecko key for market data
-HYPERLIQUID_API_KEY=… # optional Hyperliquid key for premium endpoints
-```
-
-Install dependencies and run the development server:
+Both packages need `npm install` and are started separately.
 
 ```bash
-cd LiquidAlpha/server
+# Server
+cd server
+cp .env.example .env    # fill in DATABASE_URL and JWT_SECRET at minimum
 npm install
-npm run dev   # Runs the Express server with ts-node-dev
+npm run dev              # tsx watch src/server.ts -- http://localhost:3001, ws://localhost:8080
+
+# Client (separate terminal)
+cd client
+npm install
+npm run dev               # vite -- http://localhost:5173
 ```
 
-The server will start on `http://localhost:3001` and automatically connect to the database.  By default it will fetch price data from CoinGecko every 10 seconds and broadcast updates via WebSocket.  REST endpoints are available under `/api`.
+The server needs a real PostgreSQL instance (`DATABASE_URL`) and a `JWT_SECRET` of at
+least 32 characters -- both fail startup with a clear error if missing rather than
+falling back to a default. See `server/.env.example` for the full list of environment
+variables and their defaults.
 
-### Database migrations
+### Scripts
 
-Drizzle is used for type‑safe schema definitions.  The schema lives in `server/src/db/schema.ts`.  Migrations can be generated and pushed to your database using `drizzle-kit`.  Run the following commands in the `server` folder:
+| Package | Script | What it does |
+|---|---|---|
+| `server` | `npm run dev` | `tsx watch src/server.ts` |
+| `server` | `npm run build` | `tsc` (typecheck + compile to `dist/`) |
+| `server` | `npm start` | Runs the compiled server from `dist/` |
+| `server` | `npm test` | `vitest run` |
+| `server` | `npm run generate` / `npm run migrate` | Drizzle-kit migration generate/push |
+| `client` | `npm run dev` | `vite` |
+| `client` | `npm run build` | `tsc --noEmit && vite build` |
+| `client` | `npm run typecheck` | `tsc --noEmit` |
+| `client` | `npm run preview` | `vite preview` |
 
-```bash
-npm run generate   # Generate migration SQL from schema definitions
-npm run migrate    # Push the migration to your database
-```
-
-### Important scripts
-
-* `npm run dev` – run the development server with automatic reloads.
-* `npm run build` – compile the TypeScript files into plain JavaScript.
-* `npm start` – run the compiled server from the `dist` folder.
+Neither package has a `lint` script configured yet (see "Known gaps" below) --
+`.github/workflows/quality-gate.yml` already detects this and skips the step with a
+warning rather than failing.
 
 ## API overview
 
-The following endpoints are available on the backend.  See the individual function definitions in `server/src/server.ts` for response formats.
+All endpoints are namespaced under `/api`. Request bodies/params/queries are validated
+with Zod at every boundary (`server/src/schemas/`); private routes require a valid
+session (`requireAuth`) and derive ownership from the authenticated session, never a
+client-supplied ID.
 
-| Method | Endpoint                    | Description |
-|-------|-----------------------------|-------------|
-| GET   | `/api/markets`              | Returns an array of market snapshots (symbol, price, volume, 24h change). |
-| GET   | `/api/signals`              | Returns all generated signals.  Filtered queries can be added in future versions. |
-| POST  | `/api/signals/generate`     | Triggers the signal generator for a given symbol and returns the generated signal. |
-| GET   | `/api/stats`                | Returns summary statistics such as total and active signals. |
-| GET   | `/api/funding/:symbol`      | Returns the current funding rate for a symbol using the Hyperliquid API wrapper. |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/nonce` | — | Issue a login nonce for a wallet address/chain |
+| POST | `/api/auth/verify` | — | Verify a signed nonce, create a session |
+| GET | `/api/auth/me` | ✓ | Current authenticated user |
+| POST | `/api/auth/logout` | — | Revoke the current session |
+| GET / PUT | `/api/risk/limits` | ✓ | Read/update the caller's risk limits (position size, leverage, open-position cap, daily-loss cap, personal kill switch) |
+| POST | `/api/execution/orders` | ✓ | Submit a paper-trading order (idempotent via a client-generated key) |
+| GET | `/api/execution/orders` | ✓ | Paginated order history |
+| POST | `/api/execution/orders/:id/cancel` | ✓ | Cancel a cancellable order the caller owns |
+| GET | `/api/execution/positions` | ✓ | Paginated open positions |
+| POST | `/api/execution/positions/:id/close` | ✓ | Close a position the caller owns |
+| GET | `/api/markets` | — | Current market snapshots, flagged `stale` past the ingestion staleness threshold |
+| GET | `/api/signals` | — | Paginated generated signals |
+| POST | `/api/signals/generate` | — | Trigger signal generation on demand |
+| GET | `/api/stats` | — | Aggregate signal counts |
+| GET | `/api/funding/:symbol` | — | Hyperliquid funding rate for a symbol |
+| GET | `/api/health` | — | Liveness -- process is up |
+| GET | `/api/ready` | — | Readiness -- database + market-data feed independently checked |
+| GET | `/api/observability/metrics` | — | Request counts/durations, order-rejection and provider-retry counters, WS/market-data health |
+| GET | `/api/market-data/health` | — | Narrower, pre-existing market-data health check (kept alongside `/api/ready`) |
+| GET | `/api/websocket/metrics` | — | Narrower, pre-existing WS connection/subscription counts |
 
-The WebSocket server listens on the same host at port `8080`.  It emits `marketUpdate` messages whenever fresh market data is fetched and `newSignal` messages whenever a new signal is created.
+WebSocket (`ws://localhost:8080` by default): send `{ type: 'subscribe' | 'unsubscribe',
+channel: 'markets' | 'signals' | 'user', symbol? }`. `markets`/`signals` are public;
+`user` requires the session cookie sent at handshake time and always resolves to the
+connecting user's own channel -- a client can never subscribe to another user's private
+channel by supplying an ID, because the protocol doesn't accept one.
+
+See `docs/observability/signals.md` and `docs/operations/runbook.md` for what to check
+when something looks wrong, and `docs/security/SECURITY_BASELINE.md` /
+`SECURE_DEVELOPMENT_CHECKLIST.md` for the security posture and checklist this repo holds
+itself to.
+
+## Known gaps (tracked, not hidden)
+
+- **No lint configuration** in either package -- CI warns and skips rather than failing.
+- **No client test framework** configured yet -- CI warns and skips.
+- Client production bundle is a single ~586 kB chunk (~199 kB gzipped) -- past Vite's
+  default 500 kB warning threshold; a candidate for code-splitting, not yet done.
+- `npm audit` on `server/`: 4 moderate findings, all from `drizzle-kit`'s dev-only
+  transitive `esbuild` dependency (no production/runtime exposure).
+- Analytics/performance reporting (migration step 15) is not yet built -- no UI or API
+  exists to audit here yet; see issue `DATA-015` (blocked pending a product decision on
+  minimum-sample-size thresholds, not implemented speculatively).
+- Metrics in `/api/observability/metrics` are in-memory and reset on every process
+  restart; no external APM/exporter is wired up (deliberate scope decision, see
+  `docs/observability/strategy.md`).
 
 ## Development guidelines
 
-* **Type safety** – all modules are written in TypeScript and exported types are documented where appropriate.
-* **Error handling** – asynchronous route handlers should use the `wrapAsync` pattern shown in `server/src/bootstrap.ts` to ensure that promise rejections are caught and passed to Express’s error middleware.
-* **Modularity** – each module has a single responsibility: indicator calculations live in `indicators.ts`, signal generation lives in `technical‑analysis.ts`, etc.  Do not mix database access, business logic and HTTP handling in the same file.
-* **Documentation** – add JSDoc comments to functions and types so that the intended behaviour is clear to other developers.  This repository strives to be self‑documenting, but additional inline comments are welcome.
-
-## References
-
-The design and architecture of LiquidAlpha are based on the detailed specification in the document **“LiquidAlpha – Complete Platform Overview”** provided with this repository.  For further information on the planned frontend and advanced analytics features, refer to the original document.
+- **Type safety** -- both packages are strict TypeScript; shared request/response shapes
+  are Zod schemas (`server/src/schemas/`), not hand-duplicated interfaces.
+- **Ownership derives from the session, never the client** -- every route that reads or
+  mutates user-owned data (risk limits, orders, positions) filters by `req.user.id` from
+  the verified session, exactly the boundary that was an open access-control gap in the
+  pre-migration reference app (see `docs/audit/REPLIT_REPOSITORY_AUDIT.md`, historical).
+- **Paper trading only** -- `EXECUTION_MODE` defaults to `paper` and nothing in this
+  codebase initializes a signed Hyperliquid SDK client; there is no path to a live trade.
+- **Modularity** -- each server domain (`auth/`, `risk/`, `execution/`, `market-data/`,
+  `websocket/`, `observability/`) owns its own logic; route handlers stay thin.
+- Independent-review agent: `.claude/agents/liquidalpha-quality-gate.md` (invoke with
+  `/quality-gate` in a Claude Code session) -- see `docs/development/QUALITY_GATE_AGENT.md`.

@@ -56,8 +56,10 @@ Mounted routers:
   (`(user_id, idempotency_key)` unique constraint) and risk gating (PR #14).
 
 Inline (not yet router-extracted) endpoints on `server.ts` directly:
-- `GET /api/markets`, `GET /api/market-data/health` — market-data ingestion + staleness
-  (`market-data/` module, PR #9).
+- `GET /api/markets`, `GET /api/market-data/health`, `GET /api/markets/:symbol/candles`
+  — market-data ingestion + staleness (`market-data/` module, PR #9; Hyperliquid made
+  primary and CoinGecko demoted to an explicitly-labeled fallback as of `DATA-HL-001`,
+  issue #34 — see `docs/architecture/market-data.md`).
 - `GET /api/websocket/metrics` — connection/subscription observability for the WS layer
   (`websocket/` module, PR #11 — real per-channel/per-symbol subscriptions, not global
   broadcast).
@@ -166,8 +168,8 @@ flowchart LR
   Risk --> DB
   Exec --> DB
   Signals --> DB
-  Markets --> HL
-  Markets --> CG
+  Markets -- primary --> HL
+  Markets -- fallback only --> CG
   WS --> Markets
   WS --> Signals
 ```

@@ -6,14 +6,21 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { createMarketDataWsServer } from './websocket/server';
 import { db, connectDb } from './db/index';
-import { markets, signals } from './db/schema';
+import { markets, signals, candles } from './db/schema';
 import { generateSignals } from './technical-analysis';
 import { getFundingRate } from './hyperliquid-real';
 import { wrapAsync, installProcessErrorHandlers } from './bootstrap';
-import { count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import { validate } from './middleware/validate';
 import { GenerateSignalsRequestSchema, type GenerateSignalsRequest } from './schemas/signals';
-import { FundingRateParamsSchema, type FundingRateParams } from './schemas/markets';
+import {
+  FundingRateParamsSchema,
+  type FundingRateParams,
+  CandlesParamsSchema,
+  type CandlesParams,
+  CandlesQuerySchema,
+  type CandlesQuery,
+} from './schemas/markets';
 import { PaginationQuerySchema, type PaginationQuery } from './schemas/pagination';
 import { authRouter } from './auth/router';
 import { riskRouter } from './risk/router';
@@ -21,7 +28,7 @@ import { executionRouter } from './execution/router';
 import { analyticsRouter } from './analytics/router';
 import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
-import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
+import { runIngestionCycle, runCandleBackfillCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
 import { requestContext, RESPONSE_REQUEST_ID_HEADER } from './observability/requestContext';
 import { httpLogger } from './observability/httpLogger';
 import { log } from './observability/logger';
@@ -152,6 +159,11 @@ async function updateSignals() {
 
 // Kick off background tasks with specified intervals
 setInterval(() => runIngestionCycle((symbol, event, payload) => wsServer.publishMarketUpdate(symbol, event, payload)), 10_000);
+setInterval(() => {
+  runCandleBackfillCycle().catch((err) =>
+    log('error', 'candle_backfill_cycle_failed', { error: err instanceof Error ? err.message : String(err) }),
+  );
+}, 60_000);
 setInterval(updateSignals, 30_000);
 setInterval(() => {
   sweepLimitOrders().catch((err) =>
@@ -184,9 +196,32 @@ app.get('/api/markets', wrapAsync(async (_req, res) => {
   );
 }));
 
+// OHLCV candle history for one symbol, sourced from candles (DATA-HL-001,
+// backfilled from Hyperliquid every 60s -- see market-data/ingestion.ts's
+// runCandleBackfillCycle). Ordered most-recent-first, bounded by `limit`
+// (validated, capped at 500) so a chart/backtest consumer can't request an
+// unbounded response.
+app.get(
+  '/api/markets/:symbol/candles',
+  validate('params', CandlesParamsSchema),
+  validate('query', CandlesQuerySchema),
+  wrapAsync(async (req, res) => {
+    const { symbol } = req.params as unknown as CandlesParams;
+    const { interval, limit } = req.query as unknown as CandlesQuery;
+    const rows = await db
+      .select()
+      .from(candles)
+      .where(and(eq(candles.symbol, symbol), eq(candles.interval, interval)))
+      .orderBy(desc(candles.openTime))
+      .limit(limit);
+    res.json(rows);
+  }),
+);
+
 // Reports whether the market-data ingestion loop is currently healthy --
-// i.e. whether CoinGecko fetches have been succeeding -- distinct from
-// whether any individual market row happens to be stale.
+// Hyperliquid primary, CoinGecko fallback (see getIngestionHealth's
+// `lastSuccessSource`) -- distinct from whether any individual market row
+// happens to be stale.
 app.get('/api/market-data/health', (_req, res) => {
   res.json(getIngestionHealth());
 });

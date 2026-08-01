@@ -1,6 +1,18 @@
 import { z } from 'zod';
 import { env } from './config/env';
 import { incrementCounter } from './observability/metrics';
+import {
+  AllMidsResponseSchema,
+  HyperliquidMetaResponseSchema,
+  HyperliquidMetaAndAssetCtxsResponseSchema,
+  HyperliquidCandleSnapshotResponseSchema,
+  HyperliquidFundingHistoryResponseSchema,
+  normalizeHyperliquidCandle,
+  zipMetaAndAssetCtxs,
+  type CandleInterval,
+  type NormalizedCandle,
+  type HyperliquidAssetSnapshot,
+} from './schemas/marketData';
 
 /**
  * Hyperliquid RPC wrapper.
@@ -134,4 +146,87 @@ export async function getFundingRate(coin: string) {
     );
   }
   return parsed.data;
+}
+
+/**
+ * Runs a Zod schema against `raw` or throws a descriptive error naming the
+ * mismatch and a truncated snippet of the offending payload -- the same
+ * shape of error `getFundingRate` above already throws, factored out here
+ * so the new market-data functions below don't repeat it three times.
+ */
+function parseOrThrow<S extends z.ZodTypeAny>(schema: S, raw: unknown, label: string): z.infer<S> {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const cause = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
+    throw new Error(`${label}DeserializationError: ${cause} | raw=${JSON.stringify(raw).slice(0, 200)}`);
+  }
+  return parsed.data;
+}
+
+/**
+ * Current mid price for every Hyperliquid perp asset, keyed by symbol
+ * (e.g. `{"BTC": "64123.5", ...}`). The primary source for this app's
+ * BTC/ETH/SOL current-price display -- see market-data/ingestion.ts,
+ * which calls this before falling back to CoinGecko.
+ */
+export async function fetchAllMids(): Promise<Record<string, string>> {
+  const raw = await postJSON<unknown>('/info', { type: 'allMids' });
+  return parseOrThrow(AllMidsResponseSchema, raw, 'AllMids');
+}
+
+/**
+ * Perpetual asset metadata (decimals, max leverage) for every listed
+ * asset. Used to attach `maxLeverage`/`szDecimals` context to the
+ * `markets` table rather than hardcoding it.
+ */
+export async function fetchPerpMeta() {
+  const raw = await postJSON<unknown>('/info', { type: 'meta' });
+  return parseOrThrow(HyperliquidMetaResponseSchema, raw, 'PerpMeta');
+}
+
+/**
+ * Metadata + live per-asset context (price, 24h change basis, volume) in
+ * one call -- what `market-data/ingestion.ts` actually uses as its primary
+ * source, since it needs price *and* the 24h-change/volume fields
+ * `fetchAllMids` alone doesn't carry, all genuinely Hyperliquid-sourced
+ * rather than assembled from two different providers.
+ */
+export async function fetchMetaAndAssetCtxs(): Promise<HyperliquidAssetSnapshot[]> {
+  const raw = await postJSON<unknown>('/info', { type: 'metaAndAssetCtxs' });
+  const [meta, assetCtxs] = parseOrThrow(HyperliquidMetaAndAssetCtxsResponseSchema, raw, 'MetaAndAssetCtxs');
+  return zipMetaAndAssetCtxs(meta.universe, assetCtxs);
+}
+
+/**
+ * Historical (and, for the most recent entry, in-progress) OHLCV candles
+ * for one symbol/interval/time-range, normalized to this app's own
+ * `NormalizedCandle` shape (see schemas/marketData.ts) rather than
+ * Hyperliquid's single-letter wire field names.
+ */
+export async function fetchCandleSnapshot(
+  coin: string,
+  interval: CandleInterval,
+  startTime: number,
+  endTime: number,
+): Promise<NormalizedCandle[]> {
+  const raw = await postJSON<unknown>('/info', {
+    type: 'candleSnapshot',
+    req: { coin, interval, startTime, endTime },
+  });
+  const candles = parseOrThrow(HyperliquidCandleSnapshotResponseSchema, raw, 'CandleSnapshot');
+  const receivedAt = new Date();
+  return candles.map((candle) => normalizeHyperliquidCandle(candle, receivedAt));
+}
+
+/**
+ * Funding-rate history for one symbol over a time range. Distinct from
+ * `getFundingRate` above (which calls an undocumented-in-current-research
+ * `type: "fundingRate"` single-value endpoint that predates this issue --
+ * left untouched since it has its own passing tests and isn't this issue's
+ * scope to re-verify). This uses Hyperliquid's documented `fundingHistory`
+ * endpoint instead.
+ */
+export async function fetchFundingHistory(coin: string, startTime: number, endTime?: number) {
+  const raw = await postJSON<unknown>('/info', { type: 'fundingHistory', coin, startTime, endTime });
+  return parseOrThrow(HyperliquidFundingHistoryResponseSchema, raw, 'FundingHistory');
 }

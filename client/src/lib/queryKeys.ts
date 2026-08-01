@@ -12,6 +12,7 @@ export const queryKeys = {
   marketData: {
     health: ['market-data', 'health'] as const,
     list: ['market-data', 'markets'] as const,
+    candles: (symbol: string, interval: string) => ['market-data', 'candles', symbol, interval] as const,
   },
   signals: {
     list: (params: { limit: number; offset: number }) => ['signals', 'list', params] as const,

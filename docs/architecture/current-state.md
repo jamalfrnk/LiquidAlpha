@@ -59,7 +59,10 @@ Inline (not yet router-extracted) endpoints on `server.ts` directly:
 - `GET /api/markets`, `GET /api/market-data/health`, `GET /api/markets/:symbol/candles`
   — market-data ingestion + staleness (`market-data/` module, PR #9; Hyperliquid made
   primary and CoinGecko demoted to an explicitly-labeled fallback as of `DATA-HL-001`,
-  issue #34 — see `docs/architecture/market-data.md`).
+  issue #34 — see `docs/architecture/market-data.md`). `runCandleBackfillCycle` backfills
+  all four chart-supported intervals (1m/5m/15m/1h) as of `CHART-001` (issue #36) — it
+  originally only backfilled 1m, found and fixed while building the chart UI that needed
+  the other three.
 - `GET /api/websocket/metrics` — connection/subscription observability for the WS layer
   (`websocket/` module, PR #11 — real per-channel/per-symbol subscriptions, not global
   broadcast).
@@ -86,6 +89,22 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
   row with `kind: 'guest'`), not client-only state, and flows through the same
   risk-gated paper-execution path a wallet user's trades do. See
   `docs/architecture/wallet-and-identity.md`.
+- `features/charts/` (`CHART-001`, issue #36) — BTC/ETH/SOL candlestick charts on
+  `OverviewPage`, built on `lightweight-charts` (Apache-2.0, ~35kB, actively
+  maintained, lazy-loaded into its own bundle chunk). `AssetCandlestickCard` composes
+  `useLivePrice` (a selector over the existing `useMarkets()` cache, kept live by the
+  one shared WS connection already mounted in `AppShell` -- not a second subscription)
+  and `useCandles` (30s-refetched REST, matching the mission's "near real-time" degraded
+  mode since no live candle WS push exists yet -- that's `DATA-RECOVERY-001`). Responsive:
+  one chart + a symbol switcher below `md` (768px), all three at `md`+ (2-column, third
+  spanning full width) and `xl`+ (1280px, three across). Both layouts render
+  simultaneously in the DOM (CSS `hidden`/`md:hidden` toggles visibility, matching
+  `AppShell`'s established pattern from `UI-RESP-001`) -- found during verification that
+  this means BTC's card exists twice in the DOM at any viewport width (one
+  `display:none`), each with an identical `aria-label`. Not a real accessibility
+  problem (`display:none` elements are excluded from the accessibility tree) but worth
+  knowing if a future automated test targets an interval/symbol control by aria-label
+  alone -- it needs to also filter for the currently-visible instance.
 - `routes/` — `OverviewPage`, `SignalsPage`, `PositionsPage`, `AnalyticsPage`,
   `SettingsPage` (+ `nav.ts` for route/nav config). `AnalyticsPage` (PR for
   `feat/analytics-integrity`, migration step 15) and `SettingsPage`'s risk-limits form

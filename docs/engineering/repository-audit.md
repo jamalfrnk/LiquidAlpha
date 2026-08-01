@@ -101,7 +101,7 @@ would ask for. Cross-referencing it against merged PRs:
 | 12 paper-trading execution | `feat/paper-trading` | done (PR #14) |
 | 13 UI shell | `feat/client-shell` | done (PR #15) |
 | 14 signal/execution UX | `feat/signals-ux` (PR #16), `feat/positions-ux` (PR #17), `feat/settings-risk-limits` (PR #25) | done, 3 of 3 client PRs — [#18](https://github.com/jamalfrnk/LiquidAlpha/issues/18) |
-| 15 analytics integrity | `feat/analytics-integrity` | **blocked** on a product decision (minimum sample-size threshold) — [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) |
+| 15 analytics integrity | `feat/analytics-integrity` | done — sample-size threshold decided with the repo owner (10/30 tiers) — [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) |
 | 16 observability | `feat/observability` | done (PR #26) — [#20](https://github.com/jamalfrnk/LiquidAlpha/issues/20) |
 | 17 security test suite | `test/security-suite` | done (PR #24), scoped down from the original CSRF/oversized-payload list — [#21](https://github.com/jamalfrnk/LiquidAlpha/issues/21) |
 | 18 doc/cleanup pass | `docs/reconciliation-pass` | done (this PR) — [#22](https://github.com/jamalfrnk/LiquidAlpha/issues/22) |

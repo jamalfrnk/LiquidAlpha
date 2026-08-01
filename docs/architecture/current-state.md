@@ -51,10 +51,11 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
 
 - `app/App.tsx`, `app/AppShell.tsx`, `app/ConnectScreen.tsx` — auth-gated shell and
   wallet-connect entry (PR #15).
-- `routes/` — `OverviewPage`, `SignalsPage`, `PositionsPage`, `SettingsPage` (+
-  `nav.ts` for route/nav config). No dedicated Analytics route yet — this is the
-  outstanding "3rd of 3" client PR referenced in PR #17's description and in
-  `docs/migration/REPLIT_TO_GITHUB_PLAN.md` step 14/15.
+- `routes/` — `OverviewPage`, `SignalsPage`, `PositionsPage`, `AnalyticsPage`,
+  `SettingsPage` (+ `nav.ts` for route/nav config). `AnalyticsPage` (PR for
+  `feat/analytics-integrity`, migration step 15) and `SettingsPage`'s risk-limits form
+  (PR #25) were the two client surfaces still outstanding as of earlier revisions of
+  this doc -- both now exist.
 - `features/{auth,execution,markets,positions,realtime,risk,settings,signals}/` —
   feature-scoped hooks and logic (the pattern the migration plan explicitly modeled on
   Replit's `features/trade`/`features/markets` shape, minus the duplication issues
@@ -68,25 +69,25 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
 
 ## What is NOT yet true (do not assume otherwise)
 
-**Update (2026-07-31, DOC-018 reconciliation pass):** the two items originally listed
-here as gaps — observability and a security test suite — were closed by PR #26
-(`OBS-016`) and PR #24 (`SEC-017`), landed after this doc was first written. Current
-gaps, re-verified as of this reconciliation pass:
+**Update (2026-07-31):** the items originally listed here as gaps — observability, a
+security test suite, and analytics integrity — were closed by PR #26 (`OBS-016`), PR #24
+(`SEC-017`), and `feat/analytics-integrity` (`DATA-015`), each landed after this doc was
+first written. Current gaps, re-verified as of this update:
 
 - No client test framework — CI's client job explicitly skips a test step today.
 - No lint configuration in either package — CI explicitly warns and skips.
-- No analytics-integrity work yet (migration step 15) — no analytics UI exists to audit;
-  blocked pending a product decision on minimum sample-size thresholds
-  ([#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19)), not implemented
-  speculatively.
-- Settings screen for Analytics-style dashboards doesn't exist — only risk-limits
-  editing does (`RiskLimitsForm.tsx`, PR #25); this was the actual scope of the "3rd
-  client PR," not an analytics surface.
+- `server/src/performance.ts` is dead code, kept in place rather than deleted (nothing
+  imports it; superseded by `server/src/analytics/`, which reads real closed trades from
+  `positions` rather than the disconnected `performance` table this file used).
 
 Now true (previously listed here as gaps, since resolved):
 - Observability: structured logs, request IDs, `/api/health`/`/api/ready`,
   `/api/observability/metrics`, a WS connection-status indicator, and an error boundary
   all landed in PR #26 — see `docs/observability/strategy.md` and `signals.md`.
+- Analytics integrity: `GET /api/analytics/performance` computes real, tiered metrics
+  from closed paper trades only (never synthetic data) — see
+  `server/src/schemas/analytics.ts` for the sample-size-tier contract, decided directly
+  with the repo owner rather than invented.
 - Security test suite: nonce replay/expiry, cross-user ownership (orders/positions), and
   rate-limit enforcement are regression-tested — see PR #24 and
   `docs/security/SECURITY_BASELINE.md`'s "Security Test Suite" section.

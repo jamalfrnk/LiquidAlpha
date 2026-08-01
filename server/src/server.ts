@@ -16,6 +16,7 @@ import { PaginationQuerySchema, type PaginationQuery } from './schemas/paginatio
 import { authRouter } from './auth/router';
 import { riskRouter } from './risk/router';
 import { executionRouter } from './execution/router';
+import { analyticsRouter } from './analytics/router';
 import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
 import { runIngestionCycle, getIngestionHealth, STALE_AFTER_MS } from './market-data/ingestion';
@@ -64,6 +65,7 @@ app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/risk', riskRouter);
 app.use('/api/execution', executionRouter);
+app.use('/api/analytics', analyticsRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
 // exceptions.  Without this, asynchronous errors may cause the Node.js

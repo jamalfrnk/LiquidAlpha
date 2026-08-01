@@ -43,6 +43,13 @@
       "when": 1785379257756,
       "tag": "0005_paper_trading_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785577230515,
+      "tag": "0006_panoramic_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

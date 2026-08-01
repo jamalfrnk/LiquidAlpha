@@ -1,4 +1,4 @@
-import type { IncomingMessage } from 'node:http';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { verifySessionToken } from '../auth/session';
 import { SESSION_COOKIE_NAME } from '../auth/cookie';
@@ -71,9 +71,25 @@ function readCookie(header: string | undefined, name: string): string | undefine
  * request) -- an anonymous connection is still allowed, for the public
  * `markets`/`signals` channels, it just can't subscribe to the private
  * `user` channel.
+ *
+ * Accepts either a standalone port (local dev/tests -- binds its own
+ * listening socket, unchanged from before) or an existing `http.Server`
+ * (production -- attaches to that server's `upgrade` event instead of
+ * opening a second port, per DEPLOY-001's single-origin requirement).
  */
-export function createMarketDataWsServer(port: number): MarketDataWsServer {
-  const wss = new WebSocketServer({ port, maxPayload: MAX_PAYLOAD_BYTES });
+export function createMarketDataWsServer(portOrServer: number | HttpServer): MarketDataWsServer {
+  const attachedServer = typeof portOrServer === 'number' ? undefined : portOrServer;
+  const wss = attachedServer
+    ? new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES })
+    : new WebSocketServer({ port: portOrServer as number, maxPayload: MAX_PAYLOAD_BYTES });
+
+  if (attachedServer) {
+    attachedServer.on('upgrade', (request, socket, head) => {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    });
+  }
   const registry = new SubscriptionRegistry<WebSocket>();
   const state = new Map<WebSocket, ClientState>();
   let connectionCount = 0;
@@ -176,7 +192,7 @@ export function createMarketDataWsServer(port: number): MarketDataWsServer {
       };
     },
     address() {
-      const addr = wss.address();
+      const addr = attachedServer ? attachedServer.address() : wss.address();
       if (typeof addr === 'string' || addr === null) {
         throw new Error('WebSocket server is not listening on a TCP port');
       }

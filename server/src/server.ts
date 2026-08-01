@@ -1,4 +1,6 @@
 import { env } from './config/env';
+import http from 'node:http';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -49,6 +51,16 @@ const corsOrigins = env.CORS_ORIGIN
   ? env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
   : ['http://localhost:3000', 'http://localhost:5173'];
 const app = express();
+
+// Single-origin production serving (DEPLOY-001): the built client and the
+// API/WS server share one process/port, so a browser refresh on a client
+// route, a WS upgrade, and an API call are all same-origin -- no separate
+// client host to configure CORS/cookies for in production. Local dev is
+// unchanged: Vite still serves the client on 5173 and the WS server still
+// binds its own WS_PORT, matching how `npm run dev` in both packages has
+// always worked.
+const isProduction = process.env.NODE_ENV === 'production';
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
 // `exposedHeaders` is required for browser JS to read a custom response
 // header cross-origin at all -- without it, `X-Request-Id` is set on the
 // wire but invisible to `fetch()`'s `res.headers.get(...)` in the client,
@@ -61,6 +73,28 @@ app.use(requestContext);
 app.use(httpLogger);
 app.use(express.json());
 app.use(cookieParser());
+
+if (isProduction) {
+  // `index: false` -- index.html is served explicitly by the SPA-fallback
+  // route below (registered after /api routes), not by static's own
+  // directory-index behavior, so it can get the no-cache header below
+  // instead of static's default caching.
+  app.use(
+    express.static(clientDistPath, {
+      index: false,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else {
+          // Vite fingerprints these filenames by content hash, so a cached
+          // copy is never stale -- a new deploy just ships new filenames.
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }),
+  );
+}
+
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/risk', riskRouter);
@@ -81,13 +115,22 @@ connectDb().then(() => {
   process.exit(1);
 });
 
+// The shared HTTP server both Express and the WebSocket upgrade attach to
+// in production. `app.listen(...)` (used in dev below) does this same
+// `http.createServer(app)` internally -- doing it explicitly here is what
+// lets the WS server share the port instead of opening its own.
+const httpServer = http.createServer(app);
+
 /**
  * WebSocket server with real per-channel/per-symbol subscriptions --
  * replacing the previous global broadcast-to-every-client, which had no
  * concept of client interest at all (GH F-4, Replit H-4). See
  * websocket/server.ts for the subscription/auth/heartbeat mechanics.
+ *
+ * Production shares the single public HTTP server/port (DEPLOY-001); local
+ * dev keeps the existing separate WS_PORT, unchanged.
  */
-const wsServer = createMarketDataWsServer(env.WS_PORT);
+const wsServer = createMarketDataWsServer(isProduction ? httpServer : env.WS_PORT);
 
 /**
  * Periodically generate trading signals.
@@ -251,6 +294,19 @@ app.get('/api/observability/metrics', (_req, res) => {
   });
 });
 
+// SPA fallback -- registered after every /api route (so an unmatched API
+// path still 404s as JSON via Express's default, not as this HTML page)
+// and after static (so a real built asset is served from disk, not this
+// fallback). Anything else GET-able falls back to index.html so a browser
+// refresh on a client-side route like /analytics finds the SPA shell
+// instead of a 404.
+if (isProduction) {
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
 // Global error handler.  If any wrapped route throws an error it will
 // arrive here.  Avoid exposing stack traces to clients in production.
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -258,9 +314,16 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-// Start the HTTP server.  The port can be configured via the PORT
-// environment variable.  A message is printed to the console on start.
+// Start the HTTP server. In production this is the single public port
+// serving the API, the built client, and WebSocket upgrades together
+// (DEPLOY-001); in dev it's the API/WS split that `npm run dev` in both
+// packages has always assumed. Binds 0.0.0.0 so it's reachable from
+// outside localhost when deployed (Replit, containers, etc.).
 const PORT = env.PORT;
-app.listen(PORT, () => {
-  log('info', 'server_started', { httpPort: PORT, wsPort: env.WS_PORT });
+httpServer.listen(PORT, '0.0.0.0', () => {
+  log('info', 'server_started', {
+    httpPort: PORT,
+    wsPort: isProduction ? PORT : env.WS_PORT,
+    mode: isProduction ? 'production-single-origin' : 'development-split-origin',
+  });
 });

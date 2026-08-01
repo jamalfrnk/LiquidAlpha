@@ -23,4 +23,7 @@ export const queryKeys = {
   risk: {
     limits: ['risk', 'limits'] as const,
   },
+  analytics: {
+    performance: ['analytics', 'performance'] as const,
+  },
 };

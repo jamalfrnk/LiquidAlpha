@@ -3,6 +3,20 @@ import { performance } from './db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
+ * DEAD CODE, kept in place rather than deleted in this pass -- nothing in
+ * the current codebase calls `recordPerformance`, `getPerformance`, or
+ * `getOverallPerformance` (verified via a repo-wide grep during DATA-015).
+ * This module predates the real execution domain (`execution/paperEngine.ts`,
+ * PR #14) and is keyed by `signalId` against a separate `performance` table
+ * -- incompatible with the actual closed-trade data model, which lives on
+ * `positions.realizedPnl`/`positions.closedAt`. Real performance analytics
+ * are implemented in `analytics/metrics.ts` + `analytics/queries.ts` against
+ * `positions`, not this file. Flagged here rather than removed because
+ * deleting it doesn't fall within this issue's scope and the `performance`
+ * DB table it depends on is a separate, out-of-scope migration decision.
+ */
+
+/**
  * A performance record captures a realised profit or loss event for a user.
  * PnL values are stored as numeric strings in the database, therefore
  * consumers should parse them into numbers when performing calculations.

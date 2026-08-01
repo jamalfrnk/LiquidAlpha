@@ -5,6 +5,7 @@ import { ConnectScreen } from './ConnectScreen';
 import { OverviewPage } from '../routes/OverviewPage';
 import { SignalsPage } from '../routes/SignalsPage';
 import { PositionsPage } from '../routes/PositionsPage';
+import { AnalyticsPage } from '../routes/AnalyticsPage';
 import { SettingsPage } from '../routes/SettingsPage';
 
 function AuthGate() {
@@ -24,6 +25,7 @@ function AuthGate() {
         <Route path="/" component={OverviewPage} />
         <Route path="/signals" component={SignalsPage} />
         <Route path="/positions" component={PositionsPage} />
+        <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route>
           <p className="text-ink-secondary">Page not found.</p>

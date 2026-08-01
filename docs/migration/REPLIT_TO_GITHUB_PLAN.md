@@ -2,7 +2,7 @@
 
 Prioritized backlog, ordered per the assignment's implementation sequence, informed by what the audits actually found. Each item lists: what it is, why it's at this position, source material (if any), and rough scope. Each becomes its own small PR — never one large migration PR.
 
-> **Status reconciliation (2026-07-31):** [`docs/engineering/repository-audit.md`](../engineering/repository-audit.md) cross-references every step below against actual merged PRs in one table. Steps 1–14, 16, and 17 are done. Step 15 (analytics integrity) is blocked pending a product decision (see its entry below and issue [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19)) -- not fabricated as done to make this list look complete. Step 18 (this one) is done as of this PR (`docs/reconciliation-pass`).
+> **Status reconciliation (2026-07-31):** [`docs/engineering/repository-audit.md`](../engineering/repository-audit.md) cross-references every step below against actual merged PRs in one table. All 18 steps are done as of `feat/analytics-integrity` (step 15 -- the last one blocked on a product decision, resolved directly with the repo owner rather than invented).
 
 ## Sequence
 
@@ -55,7 +55,7 @@ Signal cards distinguishing new/expired/triggered/cancelled/invalidated states (
 
 ### 15. Analytics integrity — `feat/analytics-integrity`
 Every metric shown must state its definition, source, date range, sample size, and whether it's backtest/paper/live (assignment requirement). This directly replaces Replit's `Math.random()`-generated Sharpe ratio/max drawdown (C-5) with "insufficient data" states until real closed-trade history exists in volume. **Depends on: step 12 generating real paper-trade history to eventually report on.**
-**Status: not started.** Tracked as [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) (`DATA-015`).
+**Status (2026-07-31): done.** Sample-size threshold decided directly with the repo owner (not invented): below 10 closed trades, no metrics; 10-29 shows win rate/P&L only, labeled preliminary; 30+ adds a risk-adjusted return ratio (explicitly not called "Sharpe ratio" -- no annualization) and max drawdown. See `server/src/schemas/analytics.ts`. Tracked as [#19](https://github.com/jamalfrnk/LiquidAlpha/issues/19) (`DATA-015`).
 
 ### 16. Observability — `feat/observability`
 Structured logging, request IDs, health checks distinguishing process/DB/market-data/WS/execution-provider health (assignment requirement) — none of this exists in either repo today. **Depends on: most of the above being in place to have something worth observing.**

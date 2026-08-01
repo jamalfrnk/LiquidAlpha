@@ -106,6 +106,7 @@ client-supplied ID.
 | POST | `/api/signals/generate` | — | Trigger signal generation on demand |
 | GET | `/api/stats` | — | Aggregate signal counts |
 | GET | `/api/funding/:symbol` | — | Hyperliquid funding rate for a symbol |
+| GET | `/api/analytics/performance` | ✓ | Tiered performance metrics from the caller's own closed paper trades (see "Known gaps" below for the sample-size tiers) |
 | GET | `/api/health` | — | Liveness -- process is up |
 | GET | `/api/ready` | — | Readiness -- database + market-data feed independently checked |
 | GET | `/api/observability/metrics` | — | Request counts/durations, order-rejection and provider-retry counters, WS/market-data health |
@@ -131,9 +132,15 @@ itself to.
   default 500 kB warning threshold; a candidate for code-splitting, not yet done.
 - `npm audit` on `server/`: 4 moderate findings, all from `drizzle-kit`'s dev-only
   transitive `esbuild` dependency (no production/runtime exposure).
-- Analytics/performance reporting (migration step 15) is not yet built -- no UI or API
-  exists to audit here yet; see issue `DATA-015` (blocked pending a product decision on
-  minimum-sample-size thresholds, not implemented speculatively).
+- Analytics/performance reporting (migration step 15, `/api/analytics/performance` +
+  the Analytics page) is real, but deliberately tiered by sample size (decided
+  2026-07-31): below 10 closed paper trades, nothing is shown; 10-29 shows win rate and
+  P&L only, explicitly labeled preliminary; 30+ adds a risk-adjusted return ratio (mean
+  ÷ stddev of per-trade returns -- **not** an annualized Sharpe ratio) and max drawdown.
+  See `server/src/schemas/analytics.ts` for the exact contract.
+- `server/src/performance.ts` is dead code, kept in place rather than deleted --
+  superseded by `server/src/analytics/` (which reads real closed trades from
+  `positions`, not the disconnected `performance` table this file used).
 - Metrics in `/api/observability/metrics` are in-memory and reset on every process
   restart; no external APM/exporter is wired up (deliberate scope decision, see
   `docs/observability/strategy.md`).

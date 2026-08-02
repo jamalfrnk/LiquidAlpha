@@ -2,6 +2,7 @@ import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { formatRelativeTime, formatPrice, formatPercent } from '../../lib/format';
+import { SignalStrength } from './SignalStrength';
 import type { Signal } from './types';
 import type { MarketSnapshot } from '../markets/types';
 
@@ -42,21 +43,7 @@ export function SignalCard({ signal, market }: { signal: Signal; market: MarketS
           <Badge variant={STATUS_VARIANT[signal.status]}>{signal.status}</Badge>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-ink-muted">Rule Alignment</span>
-            <span className="tabular-nums font-medium text-ink-primary">{signal.ruleAlignmentScore}/100</span>
-          </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-bg-floating">
-            <div
-              className="h-full rounded-full bg-brand-500"
-              style={{ width: `${Math.min(100, Number(signal.ruleAlignmentScore))}%` }}
-            />
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            Heuristic indicator-agreement score (rules {signal.ruleVersion}) -- not a probability of winning.
-          </p>
-        </div>
+        <SignalStrength score={signal.signalScore} />
 
         <div className="grid grid-cols-2 gap-3 rounded-lg bg-bg-floating/60 p-3 text-sm sm:grid-cols-4">
           <div>

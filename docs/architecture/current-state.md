@@ -54,6 +54,17 @@ Mounted routers:
   left open.).
 - `/api/execution` → `execution/` — paper-trading orders/positions with idempotency
   (`(user_id, idempotency_key)` unique constraint) and risk gating (PR #14).
+- `/api/backtests` → `backtest/` — deterministic historical backtesting engine
+  (`BACKTEST-001`, issue #38). `POST /` fetches historical Hyperliquid candles
+  (and funding history, if enabled) for the requested symbols/interval/range
+  directly from Hyperliquid (bounded by `MAX_BACKTEST_SYMBOLS`/
+  `MAX_BACKTEST_CANDLES_PER_SYMBOL`), replays `technical-analysis.ts`'s own
+  `evaluateSignal()` with a strict no-lookahead boundary, and persists the
+  result (`backtest_runs`/`backtest_trades` tables). `GET /` lists a user's own
+  runs; `GET /:id` returns one run's full trade list — both ownership-checked
+  the same way `execution/router.ts` already is. See
+  `docs/product/backtesting-methodology.md`. Results UI is deliberately out of
+  scope for this issue.
 
 Inline (not yet router-extracted) endpoints on `server.ts` directly:
 - `GET /api/markets`, `GET /api/market-data/health`, `GET /api/markets/:symbol/candles`

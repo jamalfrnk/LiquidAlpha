@@ -61,6 +61,38 @@ describe('computeSignalScore', () => {
     expect(missingAdx.totalScore).toBeGreaterThan(0);
   });
 
+  it('reduces but does not zero the score when momentum data is missing but trend is still determinable', () => {
+    const full = computeSignalScore(baseInput());
+    const missingMacd = computeSignalScore(baseInput({ macdHist: null }));
+    expect(missingMacd.direction).toBe('LONG'); // trend alone still determines direction when momentum is merely absent, not disagreeing
+    expect(missingMacd.componentScores.momentumAgreement).toBe(0);
+    expect(missingMacd.indicatorsMissing).toEqual(['macdHist']);
+    expect(missingMacd.conflictingConditions).toEqual([]); // missing is not the same as disagreeing
+    expect(missingMacd.totalScore).toBeLessThan(full.totalScore);
+    expect(missingMacd.totalScore).toBeGreaterThan(0);
+  });
+
+  it('scores exactly 0 with indicatorAvailability 0 when every indicator is unavailable, even with fresh data', () => {
+    const result = computeSignalScore(
+      baseInput({
+        ema50: null,
+        ema200: null,
+        macdHist: null,
+        rsi: null,
+        adx: null,
+        fisher: null,
+        keltnerUpper: null,
+        keltnerLower: null,
+        atr: null,
+      }),
+    );
+    expect(result.direction).toBe('NEUTRAL');
+    expect(result.totalScore).toBe(0);
+    expect(result.componentScores.indicatorAvailability).toBe(0);
+    expect(result.indicatorsUsed).toEqual([]);
+    expect(result.indicatorsMissing).toHaveLength(9);
+  });
+
   it('reduces the dataFreshness component and total score for stale data, without affecting direction', () => {
     const fresh = computeSignalScore(baseInput());
     const stale = computeSignalScore(baseInput({ dataAgeMs: 60_000, staleAfterMs: 30_000 }));

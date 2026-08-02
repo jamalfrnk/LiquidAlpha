@@ -28,7 +28,21 @@ function strengthLabel(totalScore: number): string {
   return 'Strong';
 }
 
-export function SignalStrength({ score }: { score: SignalScore }) {
+export function SignalStrength({ score }: { score: SignalScore | null }) {
+  if (score === null) {
+    return (
+      <div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-ink-muted">Signal strength</span>
+          <span className="text-ink-muted">Not available</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+          This signal was generated before Signal strength scoring existed -- no score was ever computed for it.
+        </p>
+      </div>
+    );
+  }
+
   const label = strengthLabel(score.totalScore);
   const hasCaveats =
     score.conflictingConditions.length > 0 ||

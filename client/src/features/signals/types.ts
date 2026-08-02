@@ -63,7 +63,8 @@ export interface Signal {
   takeProfit: string;
   riskRewardRatio: string;
   indicatorSnapshot: IndicatorSnapshot;
-  signalScore: SignalScore;
+  /** Null for any signal generated before SIGNAL-SCORE-001 shipped -- see server/src/db/schema.ts's own comment on why this column is nullable rather than backfilled. */
+  signalScore: SignalScore | null;
   dataFrom: string;
   dataTo: string;
   barCount: number;

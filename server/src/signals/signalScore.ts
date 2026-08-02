@@ -207,7 +207,14 @@ export function computeSignalScore(input: SignalScoreInput): SignalScore {
   }
 
   let volatilitySuitability = 0;
-  if (keltnerUpper !== null && keltnerLower !== null && trendBullish !== null && !isConflict) {
+  if (
+    keltnerUpper !== null &&
+    keltnerLower !== null &&
+    keltnerUpper !== 0 &&
+    keltnerLower !== 0 &&
+    trendBullish !== null &&
+    !isConflict
+  ) {
     const breakoutDistance = trendBullish
       ? (price - keltnerUpper) / keltnerUpper
       : (keltnerLower - price) / keltnerLower;

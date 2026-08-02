@@ -64,6 +64,13 @@
       "when": 1785599715888,
       "tag": "0008_bright_lake",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785704239802,
+      "tag": "0009_wide_korath",
+      "breakpoints": true
     }
   ]
 }

@@ -130,7 +130,12 @@ any client UI -- that's `CHART-001`.
   `allMids` and merges live mid-price updates into a broadcast loop that publishes
   to connected clients every second, per tracked symbol. REST polling (10s prices,
   60s candles) remains as the source of `change24h`/`volume`/candle history, which
-  the WS channel doesn't carry -- see `getLastKnownMarketMeta` below.
+  the WS channel doesn't carry -- see `getLastKnownMarketMeta` below. The published
+  `source` field on this fast path reflects the *last REST ingestion cycle's* actual
+  source (`meta.source`), not simply "hyperliquid" -- `price` here is always a live
+  Hyperliquid WS mid, but change24h/volume are only as trustworthy as that last REST
+  cycle, which could itself have fallen back to CoinGecko even while the WS
+  connection stays healthy (independent review of PR #59, finding LA-QG-002).
 - **Reconnect/backoff/stale-execution-gating (implemented in `DATA-RECOVERY-001`).**
   The WS client reconnects with exponential backoff plus jitter on close/error, and
   detects a silent stall (connection open but no message for 30s) via a reset-able

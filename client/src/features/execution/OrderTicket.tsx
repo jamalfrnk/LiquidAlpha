@@ -11,6 +11,7 @@ import { formatPrice } from '../../lib/format';
 import { ApiError } from '../../lib/api';
 import { submitOrder as submitOrderRequest } from './api';
 import { useMarkets } from '../markets/useMarkets';
+import { Disclosure } from '../../components/Disclosure';
 import type { Side, OrderType } from './types';
 
 const ASSETS = ['BTC', 'ETH', 'SOL'] as const;
@@ -217,6 +218,8 @@ export function OrderTicket() {
             <Badge variant="paper" className="mt-2">
               Paper Trading -- simulated fill, no real exchange
             </Badge>
+
+            <Disclosure variant="detailed" context="paper-fills" className="mt-3" />
 
             <div className="mt-4 flex flex-col gap-2 rounded-lg bg-bg-floating/60 p-4 text-sm">
               <Row label="Asset" value={asset} />

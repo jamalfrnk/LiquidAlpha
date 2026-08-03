@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/queryKeys';
 import { fetchSignals } from '../features/signals/api';
 import { SignalCard } from '../features/signals/SignalCard';
 import { useMarkets } from '../features/markets/useMarkets';
+import { Disclosure } from '../components/Disclosure';
 
 const PAGE_SIZE = 12;
 
@@ -29,6 +30,8 @@ export function SignalsPage() {
           fired.
         </p>
       </div>
+
+      <Disclosure variant="detailed" context="signals" />
 
       {signals.isLoading && <p className="text-sm text-ink-muted">Loading signals…</p>}
       {signals.isError && <p className="text-sm text-short">Could not load signals.</p>}

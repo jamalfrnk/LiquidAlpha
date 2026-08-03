@@ -1,6 +1,6 @@
 {
-  "id": "e353c3ec-5325-4059-ac44-83d8957ea42d",
-  "prevId": "6883a4dd-d81c-48e8-b547-8da67920a076",
+  "id": "c3713a59-0b1e-4c5b-a51b-a47e838bfa9c",
+  "prevId": "e353c3ec-5325-4059-ac44-83d8957ea42d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -496,6 +496,57 @@
           "primaryKey": false,
           "notNull": true
         },
+        "price_source": {
+          "name": "price_source",
+          "type": "market_snapshot_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_timestamp": {
+          "name": "source_timestamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fill_model_version": {
+          "name": "fill_model_version",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_price": {
+          "name": "reference_price",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slippage_amount": {
+          "name": "slippage_amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fee_amount": {
+          "name": "fee_amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_type": {
+          "name": "market_type",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'perp'"
+        },
+        "simulated": {
+          "name": "simulated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -943,6 +994,39 @@
         "realized_pnl": {
           "name": "realized_pnl",
           "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leverage": {
+          "name": "leverage",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1'"
+        },
+        "liquidation_price_estimate": {
+          "name": "liquidation_price_estimate",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fees_paid": {
+          "name": "fees_paid",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "funding_paid": {
+          "name": "funding_paid",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "last_funding_charged_at": {
+          "name": "last_funding_charged_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

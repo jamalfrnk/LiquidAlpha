@@ -62,6 +62,17 @@ Mounted routers:
   estimate. Every fill now records price source/timestamp, fill-model version,
   reference price, slippage, and fee (nullable for fills predating this
   feature). See `docs/architecture/paper-execution.md`.
+- `/api/backtests` → `backtest/` — deterministic historical backtesting engine
+  (`BACKTEST-001`, issue #38). `POST /` fetches historical Hyperliquid candles
+  (and funding history, if enabled) for the requested symbols/interval/range
+  directly from Hyperliquid (bounded by `MAX_BACKTEST_SYMBOLS`/
+  `MAX_BACKTEST_CANDLES_PER_SYMBOL`), replays `technical-analysis.ts`'s own
+  `evaluateSignal()` with a strict no-lookahead boundary, and persists the
+  result (`backtest_runs`/`backtest_trades` tables). `GET /` lists a user's own
+  runs; `GET /:id` returns one run's full trade list — both ownership-checked
+  the same way `execution/router.ts` already is. See
+  `docs/product/backtesting-methodology.md`. Results UI is deliberately out of
+  scope for this issue.
 
 Inline (not yet router-extracted) endpoints on `server.ts` directly:
 - `GET /api/markets`, `GET /api/market-data/health`, `GET /api/markets/:symbol/candles`

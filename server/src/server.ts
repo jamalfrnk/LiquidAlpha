@@ -27,6 +27,7 @@ import { riskRouter } from './risk/router';
 import { executionRouter } from './execution/router';
 import { analyticsRouter } from './analytics/router';
 import { sweepLimitOrders, accruePaperFunding } from './execution/paperEngine';
+import { backtestRouter } from './backtest/router';
 import { apiLimiter } from './middleware/rateLimit';
 import {
   runIngestionCycle,
@@ -116,6 +117,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/risk', riskRouter);
 app.use('/api/execution', executionRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/backtests', backtestRouter);
 
 // Install global error handlers for unhandled rejections and uncaught
 // exceptions.  Without this, asynchronous errors may cause the Node.js

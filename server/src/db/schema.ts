@@ -483,3 +483,70 @@ export const positions = pgTable(
     userAssetIdx: index('positions_user_asset_idx').on(table.userId, table.asset),
   }),
 );
+
+export const backtestStatusEnum = pgEnum('backtest_status', ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED']);
+
+/**
+ * A single backtest run (BACKTEST-001) -- the full config it was run with,
+ * its resulting summary metrics, and a reference to exactly which dataset
+ * produced them, without duplicating the candle data itself into this row
+ * (per the issue's own explicit instruction). `config` and `summary` are
+ * jsonb for the same reason `signals.indicator_snapshot` is: self-contained
+ * evidence blobs nothing needs to filter/query by in SQL. `trades` are
+ * intentionally NOT stored here -- see `backtestTrades` below, which needs
+ * its own rows so `bySignalStrengthRange`/`byAsset` breakdowns and future
+ * per-trade inspection don't require re-parsing one giant jsonb array.
+ */
+export const backtestRuns = pgTable(
+  'backtest_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: backtestStatusEnum('status').default('PENDING').notNull(),
+    config: jsonb('config').notNull(),
+    engineVersion: varchar('engine_version', { length: 16 }).notNull(),
+    /** Summary metrics -- null until the run completes. */
+    summary: jsonb('summary'),
+    failureReason: text('failure_reason'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    completedAt: timestamp('completed_at'),
+  },
+  (table) => ({
+    userIdIdx: index('backtest_runs_user_id_idx').on(table.userId),
+  }),
+);
+
+/**
+ * Individual trades produced by a backtest run -- one row per
+ * `BacktestTrade` (see schemas/backtest.ts), so a run's results can be
+ * inspected/re-aggregated without re-parsing a single large jsonb blob.
+ */
+export const backtestTrades = pgTable(
+  'backtest_trades',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => backtestRuns.id, { onDelete: 'cascade' }),
+    symbol: varchar('symbol', { length: 10 }).notNull(),
+    side: orderSideEnum('side').notNull(),
+    signalStrengthScore: numeric('signal_strength_score'),
+    ruleAlignmentScore: numeric('rule_alignment_score').notNull(),
+    entryTime: timestamp('entry_time').notNull(),
+    entryPrice: numeric('entry_price').notNull(),
+    exitTime: timestamp('exit_time').notNull(),
+    exitPrice: numeric('exit_price').notNull(),
+    exitReason: varchar('exit_reason', { length: 16 }).notNull(),
+    holdingCandles: integer('holding_candles').notNull(),
+    feesPaid: numeric('fees_paid').notNull(),
+    fundingPaid: numeric('funding_paid').notNull(),
+    pnl: numeric('pnl').notNull(),
+    returnPct: numeric('return_pct').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    runIdIdx: index('backtest_trades_run_id_idx').on(table.runId),
+  }),
+);

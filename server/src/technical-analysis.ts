@@ -25,7 +25,8 @@ import type { SignalScore } from './schemas/signalScore';
  */
 
 export const RULE_VERSION = 'v2';
-const MIN_HISTORY = 210; // enough for EMA200 to be meaningful
+/** Minimum closes evaluateSignal needs before EMA200 is meaningful -- exported so callers (e.g. the backtest engine, BACKTEST-001) can validate a dataset has enough history before running, without duplicating this threshold. */
+export const MIN_HISTORY = 210;
 const ATR_STOP_MULTIPLIER = 1.5;
 const MIN_RISK_REWARD = 2; // enforced by construction, not checked after the fact
 const EMA_SEPARATION_THRESHOLD = 0.005; // 0.5%

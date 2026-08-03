@@ -10,6 +10,7 @@ import { ConnectionStatus } from '../features/realtime/ConnectionStatus';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { NAV_ITEMS } from '../routes/nav';
+import { Disclosure } from '../components/Disclosure';
 
 function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -52,10 +53,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="border-t border-border-subtle p-4">
+      <div className="flex flex-col gap-3 border-t border-border-subtle p-4">
         <Badge variant="paper" className="w-full justify-center">
           Paper Trading
         </Badge>
+        <Disclosure variant="compact" context="primary" />
       </div>
     </>
   );

@@ -3,6 +3,7 @@ import { isPhantomInstalledWithoutEvmProvider } from '../features/auth/eip6963';
 import { WalletList } from '../features/auth/WalletList';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Disclosure } from '../components/Disclosure';
 
 export function ConnectScreen() {
   const {
@@ -46,6 +47,8 @@ export function ConnectScreen() {
         <div className="mt-6">
           <Badge variant="paper">Paper Trading environment</Badge>
         </div>
+
+        <Disclosure variant="detailed" context="primary" className="mt-4" />
 
         {accountChangedNotice && (
           <p

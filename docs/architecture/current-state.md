@@ -141,7 +141,18 @@ PR #6), `db/schema.ts` (Drizzle schema, hardened FKs/indexes/enums, PR #8).
   `SettingsPage` (+ `nav.ts` for route/nav config). `AnalyticsPage` (PR for
   `feat/analytics-integrity`, migration step 15) and `SettingsPage`'s risk-limits form
   (PR #25) were the two client surfaces still outstanding as of earlier revisions of
-  this doc -- both now exist.
+  this doc -- both now exist. `MethodologyPage` (`DISCLOSURE-001`, issue #40) added as
+  a route not in the main sidebar nav -- reachable only via a `Disclosure` component's
+  "Learn more"/"Read the full methodology" link, matching the issue's "not one giant
+  warning box everywhere" scoping.
+- `components/Disclosure.tsx` (`DISCLOSURE-001`, issue #40) — the single reusable
+  disclosure component (`variant="compact" | "detailed"`, `context="primary" | "signals"
+  | "backtesting" | "paper-fills"`), icon + text (never color alone). `compact` renders
+  once in the `AppShell` sidebar footer (visible on every authenticated page) and on
+  `ConnectScreen`; `detailed` is placed contextually on `SignalsPage` and in
+  `OrderTicket`'s confirmation step. `backtesting` copy exists but has nowhere to render
+  yet -- no backtest results UI exists in the client (`BACKTEST-001` scoped that out).
+  Copy source of truth: `docs/product/paper-trading-and-educational-scope.md`.
 - `features/{auth,execution,markets,positions,realtime,risk,settings,signals}/` —
   feature-scoped hooks and logic (the pattern the migration plan explicitly modeled on
   Replit's `features/trade`/`features/markets` shape, minus the duplication issues

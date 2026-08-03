@@ -7,6 +7,7 @@ import { SignalsPage } from '../routes/SignalsPage';
 import { PositionsPage } from '../routes/PositionsPage';
 import { AnalyticsPage } from '../routes/AnalyticsPage';
 import { SettingsPage } from '../routes/SettingsPage';
+import { MethodologyPage } from '../routes/MethodologyPage';
 
 function AuthGate() {
   const { user, isLoading } = useAuth();
@@ -27,6 +28,7 @@ function AuthGate() {
         <Route path="/positions" component={PositionsPage} />
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/methodology" component={MethodologyPage} />
         <Route>
           <p className="text-ink-secondary">Page not found.</p>
         </Route>

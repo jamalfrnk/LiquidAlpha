@@ -54,6 +54,14 @@ Mounted routers:
   left open.).
 - `/api/execution` → `execution/` — paper-trading orders/positions with idempotency
   (`(user_id, idempotency_key)` unique constraint) and risk gating (PR #14).
+  `PAPER-REALISM-001` (issue #39) added a documented, versioned fill-pricing
+  model (`execution/fillModel.ts`): simulated fees (charged at entry and exit),
+  real Hyperliquid funding accrual (`accruePaperFunding`, run every 5 minutes,
+  using `fetchFundingHistory` -- not `getFundingRate`, verified broken against
+  live Hyperliquid during implementation), and a per-position liquidation-price
+  estimate. Every fill now records price source/timestamp, fill-model version,
+  reference price, slippage, and fee (nullable for fills predating this
+  feature). See `docs/architecture/paper-execution.md`.
 - `/api/backtests` → `backtest/` — deterministic historical backtesting engine
   (`BACKTEST-001`, issue #38). `POST /` fetches historical Hyperliquid candles
   (and funding history, if enabled) for the requested symbols/interval/range

@@ -26,8 +26,8 @@ import { authRouter } from './auth/router';
 import { riskRouter } from './risk/router';
 import { executionRouter } from './execution/router';
 import { analyticsRouter } from './analytics/router';
+import { sweepLimitOrders, accruePaperFunding } from './execution/paperEngine';
 import { backtestRouter } from './backtest/router';
-import { sweepLimitOrders } from './execution/paperEngine';
 import { apiLimiter } from './middleware/rateLimit';
 import {
   runIngestionCycle,
@@ -223,6 +223,11 @@ setInterval(() => {
     log('error', 'limit_order_sweep_failed', { error: err instanceof Error ? err.message : String(err) }),
   );
 }, 10_000);
+setInterval(() => {
+  accruePaperFunding().catch((err) =>
+    log('error', 'paper_funding_accrual_failed', { error: err instanceof Error ? err.message : String(err) }),
+  );
+}, 5 * 60_000);
 
 /**
  * REST API routes

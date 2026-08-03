@@ -387,7 +387,28 @@ export const orders = pgTable(
   }),
 );
 
-/** A (partial or full) execution of an order. Paper fills are always full-quantity today (see paperEngine.ts). */
+/**
+ * A (partial or full) execution of an order. Paper fills are always
+ * full-quantity today (see paperEngine.ts).
+ *
+ * PAPER-REALISM-001 provenance fields: every fill records exactly what
+ * priced it and how, so a fill can never be mistaken for a real execution
+ * or have its P&L basis silently disputed later. `simulated` is always
+ * `true` today -- recorded explicitly (not just implied by this being the
+ * only execution path that exists) so the structural non-goal of live
+ * trading is visible in the data itself, not only in code that could
+ * change. `marketType` is always `'perp'` today (no spot ingestion exists
+ * yet, see DATA-HL-001) -- present for forward-compatibility, not because
+ * spot is actually modeled.
+ *
+ * `priceSource`/`sourceTimestamp`/`fillModelVersion`/`referencePrice`/
+ * `slippageAmount`/`feeAmount` are nullable, not required: fills created
+ * before this feature shipped never had this provenance computed, and
+ * backfilling a synthetic value for them would fabricate evidence that
+ * doesn't exist (the same reasoning `signals.signal_score` follows for
+ * SIGNAL-SCORE-001). Every fill recorded from here forward always
+ * populates all of them -- see `execution/paperEngine.ts`'s `fillOrder`.
+ */
 export const fills = pgTable(
   'fills',
   {
@@ -397,6 +418,14 @@ export const fills = pgTable(
       .references(() => orders.id, { onDelete: 'cascade' }),
     price: numeric('price').notNull(),
     quantity: numeric('quantity').notNull(),
+    priceSource: marketSnapshotSourceEnum('price_source'),
+    sourceTimestamp: timestamp('source_timestamp'),
+    fillModelVersion: varchar('fill_model_version', { length: 16 }),
+    referencePrice: numeric('reference_price'),
+    slippageAmount: numeric('slippage_amount'),
+    feeAmount: numeric('fee_amount'),
+    marketType: varchar('market_type', { length: 10 }).notNull().default('perp'),
+    simulated: boolean('simulated').notNull().default(true),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({
@@ -431,6 +460,20 @@ export const positions = pgTable(
     status: positionStatusEnum('status').default('OPEN').notNull(),
     environment: executionEnvironmentEnum('environment').notNull(),
     realizedPnl: numeric('realized_pnl'),
+    /**
+     * PAPER-REALISM-001: leverage the position was opened at (quantity-
+     * weighted-averaged the same way entryPrice already is, if a
+     * subsequent same-direction order adds to it). Feeds
+     * `liquidationPriceEstimate`, recomputed on every fill that changes
+     * the position. `feesPaid`/`fundingPaid` are running totals,
+     * subtracted from the raw price-based P&L at close time -- see
+     * `execution/paperEngine.ts`'s `closePosition`.
+     */
+    leverage: numeric('leverage').notNull().default('1'),
+    liquidationPriceEstimate: numeric('liquidation_price_estimate'),
+    feesPaid: numeric('fees_paid').notNull().default('0'),
+    fundingPaid: numeric('funding_paid').notNull().default('0'),
+    lastFundingChargedAt: timestamp('last_funding_charged_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
     closedAt: timestamp('closed_at'),

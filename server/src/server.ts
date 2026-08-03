@@ -176,11 +176,15 @@ setInterval(() => {
       price: Number(price),
       change24h: Number(meta.change24h),
       volume: Number(meta.volume),
-      // A live Hyperliquid WS mid is, by definition, Hyperliquid-sourced --
-      // independent of whatever the last REST cycle's source happened to
-      // be (e.g. if REST last fell back to CoinGecko but the WS has since
-      // recovered).
-      source: 'hyperliquid',
+      // `price` here is always genuinely Hyperliquid-sourced (a live WS
+      // mid), but change24h/volume are only as fresh as the *last REST
+      // ingestion cycle*, which could itself have fallen back to
+      // CoinGecko even while this WS connection is healthy. Labeling the
+      // whole row "hyperliquid" in that window would overstate the
+      // trustworthiness of the change24h/volume figures being merged in
+      // alongside it (flagged by independent review of PR #59, LA-QG-002)
+      // -- meta.source truthfully reflects what those fields actually are.
+      source: meta.source,
       timestamp: new Date(),
     });
   }
